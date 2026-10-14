@@ -61,6 +61,18 @@ Production CI/preparation now use macos-26 with Xcode 26.4.1; macOS 15 remains t
 application deployment target and model-free runner. Dependency revisions were
 not changed. Hosted retries remain required.
 
+Runs [38646079756](https://github.com/olgvroe/Vecta/actions/runs/38646079756) and
+[38646081179](https://github.com/olgvroe/Vecta/actions/runs/38646081179) compiled
+Speech, MLX and the native app; source/security, model-free tests and all 13 native
+executable regressions passed. The subsequent Speech configuration test launcher
+assumed Xcode's flat module/object layout instead of SwiftPM's Modules/target.build
+layout and stopped both pipelines. It now supports both exact layouts and rejects
+missing modules or empty object sets before compilation. Three synthetic launcher
+regressions and all 66 packaging checks pass. A fresh pinned local Speech build
+and actual 55 model-free Speech configuration checks pass with the corrected
+launcher. This fixes verification tooling; it does not change inference behavior.
+A final current-source hosted pass and complete DMG kit are still pending.
+
 **Build 65 publication requires a successful current-source hosted rerun and a
 matching verified production kit.** Check the commit/tag's Actions runs and the
 release's artifact-verification report for completed gates. This source report

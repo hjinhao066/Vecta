@@ -212,6 +212,54 @@ class PublicTreeTests(FixtureCase):
             PUBLIC['public_files'](self.root)
 
 
+class SpeechCheckRunnerTests(FixtureCase):
+    def run_fixture(self, swiftpm, missing=False):
+        products = self.base / 'speech products'
+        search = products / 'Modules' if swiftpm else products
+        for target in ('WhisperKit', 'ArgmaxCore'):
+            write(search / (target + '.swiftmodule'), b'synthetic module')
+            if not (missing and target == 'ArgmaxCore'):
+                object_path = products / (target + '.build') / 'source.swift.o' if swiftpm else products / (target + '.o')
+                write(object_path, b'synthetic object')
+            elif swiftpm:
+                (products / (target + '.build')).mkdir()
+        capture = self.base / 'compiler-arguments'
+        compiler = self.base / 'bin/xcrun'
+        write(compiler, '''#!/bin/bash
+printf '%s\\n' "$@" > "$CAPTURE"
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = -o ]; then
+    printf '#!/bin/bash\\nexit 0\\n' > "$2"
+    chmod +x "$2"
+    exit 0
+  fi
+  shift
+done
+exit 99
+''')
+        compiler.chmod(0o755)
+        env = dict(os.environ, PATH=str(compiler.parent) + os.pathsep + os.environ['PATH'], CAPTURE=str(capture))
+        result = subprocess.run(['bash', str(ROOT / 'Tests/run-speech-model-configuration-checks.sh'), str(products)],
+                                env=env, capture_output=True, text=True)
+        if missing:
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(capture.exists())
+        else:
+            self.assertEqual(result.returncode, 0, result.stderr)
+            arguments = capture.read_text().splitlines()
+            self.assertEqual(arguments[arguments.index('-I') + 1], str(search))
+            self.assertEqual(len([argument for argument in arguments if argument.endswith('.o')]), 2)
+
+    def test_swiftpm_module_and_object_directories(self):
+        self.run_fixture(swiftpm=True)
+
+    def test_xcode_flat_products(self):
+        self.run_fixture(swiftpm=False)
+
+    def test_missing_swiftpm_objects_fail_before_compiler(self):
+        self.run_fixture(swiftpm=True, missing=True)
+
+
 class CodecInstallTests(FixtureCase):
     def setUp(self):
         super().setUp()
