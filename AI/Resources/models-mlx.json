@@ -1,0 +1,429 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "whisper",
+      "title": "WhisperKit · Whisper large-v3 Turbo",
+      "variant": "Core ML",
+      "repository": "argmaxinc/whisperkit-coreml",
+      "revision": "0f63a7800b00dd0226abd051b906c246e1907482",
+      "license": "MIT",
+      "files": [
+        {
+          "name": "AudioEncoder.mlmodelc/analytics/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/AudioEncoder.mlmodelc/analytics/coremldata.bin",
+          "sha256": "0dd9f529c744ed3c6be67f699588f7aadc4f366b5b7301dc31bd3f199944fbcc",
+          "size": 243
+        },
+        {
+          "name": "AudioEncoder.mlmodelc/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/AudioEncoder.mlmodelc/coremldata.bin",
+          "sha256": "ffa9eb76e8e9d9be75a4d527e5249e61d67fd43081c5aa110fd24efa6c8c5ea3",
+          "size": 348
+        },
+        {
+          "name": "AudioEncoder.mlmodelc/metadata.json",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/AudioEncoder.mlmodelc/metadata.json",
+          "sha256": "2cd0538f90a012de3f07d38669026d527490eff1dcfd2479a81c48206a90f0a2",
+          "size": 1974
+        },
+        {
+          "name": "AudioEncoder.mlmodelc/model.mil",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/AudioEncoder.mlmodelc/model.mil",
+          "sha256": "ef5a252831e61bb91d6547fe1add3d0658895b518d47d70004322b40a2192668",
+          "size": 7589739
+        },
+        {
+          "name": "AudioEncoder.mlmodelc/weights/weight.bin",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/AudioEncoder.mlmodelc/weights/weight.bin",
+          "sha256": "e4740fa28ed65907af754af893dfce98473fafb84dd8d718ad346985fe7678c1",
+          "size": 421968768
+        },
+        {
+          "name": "MelSpectrogram.mlmodelc/analytics/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/MelSpectrogram.mlmodelc/analytics/coremldata.bin",
+          "sha256": "c5be419f8622083ac7046306400643539f0e7577c843448c36defc090d41e7ce",
+          "size": 243
+        },
+        {
+          "name": "MelSpectrogram.mlmodelc/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/MelSpectrogram.mlmodelc/coremldata.bin",
+          "sha256": "98efa1e351b759e078c4044668926d32bee886caf7596ae897e08e21da45565a",
+          "size": 329
+        },
+        {
+          "name": "MelSpectrogram.mlmodelc/metadata.json",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/MelSpectrogram.mlmodelc/metadata.json",
+          "sha256": "2bc552e09a6f124d9e6c178dd1a6979e010206acb26308b2224887c9dcbeb35f",
+          "size": 1850
+        },
+        {
+          "name": "MelSpectrogram.mlmodelc/model.mil",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/MelSpectrogram.mlmodelc/model.mil",
+          "sha256": "c270b95b5f81d7f7d0b8a3e8f991d4e5812a37cad29349868a35b91f3a6a4463",
+          "size": 10143
+        },
+        {
+          "name": "MelSpectrogram.mlmodelc/weights/weight.bin",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/MelSpectrogram.mlmodelc/weights/weight.bin",
+          "sha256": "009d9fb8f6b589accfa08cebf1c712ef07c3405229ce3cfb3a57ee033c9d8a49",
+          "size": 373376
+        },
+        {
+          "name": "TextDecoder.mlmodelc/analytics/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/TextDecoder.mlmodelc/analytics/coremldata.bin",
+          "sha256": "4b5119bdc621c3c494f63846dc3ed43852e88826fc3b6345d42272d4b7e67724",
+          "size": 243
+        },
+        {
+          "name": "TextDecoder.mlmodelc/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/TextDecoder.mlmodelc/coremldata.bin",
+          "sha256": "605dad4099a82cf2c7afe93e6d8e322f1c16d4160ab27bd017ec2517b81c1bdd",
+          "size": 633
+        },
+        {
+          "name": "TextDecoder.mlmodelc/metadata.json",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/TextDecoder.mlmodelc/metadata.json",
+          "sha256": "e3ce6d83884552ffcc2c34799e8e1211dcda59f1aaea5a79bf988c6cd16abbf0",
+          "size": 4924
+        },
+        {
+          "name": "TextDecoder.mlmodelc/model.mil",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/TextDecoder.mlmodelc/model.mil",
+          "sha256": "ebaf8566f367b6465276c3ed57bb99063888fa955b67828585bf19db24c85f56",
+          "size": 217177
+        },
+        {
+          "name": "TextDecoder.mlmodelc/weights/weight.bin",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/TextDecoder.mlmodelc/weights/weight.bin",
+          "sha256": "d69700903d518ada33170ab77faaaf464496fb9ff65752c6d5a6109aa2fb02db",
+          "size": 203199860
+        },
+        {
+          "name": "TextDecoderContextPrefill.mlmodelc/analytics/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/TextDecoderContextPrefill.mlmodelc/analytics/coremldata.bin",
+          "sha256": "97639d36c7b137ea51c3c39b175911788f4d4a601ab03cd67a4b14164c3145e1",
+          "size": 243
+        },
+        {
+          "name": "TextDecoderContextPrefill.mlmodelc/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/TextDecoderContextPrefill.mlmodelc/coremldata.bin",
+          "sha256": "2c159f5c862ec187092ea58e755d8c0b298952e22f3d75da023d7693c1c7389e",
+          "size": 380
+        },
+        {
+          "name": "TextDecoderContextPrefill.mlmodelc/metadata.json",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/TextDecoderContextPrefill.mlmodelc/metadata.json",
+          "sha256": "eb88dc350fa6748a8bc3fa5fb10958152c138752ebbbac1824d2f99b4c9fc068",
+          "size": 2240
+        },
+        {
+          "name": "TextDecoderContextPrefill.mlmodelc/model.mil",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/TextDecoderContextPrefill.mlmodelc/model.mil",
+          "sha256": "990ff5052fd817e28ba7c34d9d06d324c69c7c0630b6eaac9cfdf08329dbcb34",
+          "size": 4092
+        },
+        {
+          "name": "TextDecoderContextPrefill.mlmodelc/weights/weight.bin",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/TextDecoderContextPrefill.mlmodelc/weights/weight.bin",
+          "sha256": "1310070082639173e9d81508c5f220692d489e85655aa6883cc1c7506da7fcfd",
+          "size": 12288192
+        },
+        {
+          "name": "config.json",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/config.json",
+          "sha256": "f01d83dd891791d6f12421c05d3ed8ebbe70866f10d6c9a7a7e80b558ce5a0f1",
+          "size": 1149
+        },
+        {
+          "name": "generation_config.json",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo_632MB/generation_config.json",
+          "sha256": "7fbb053a023be11fbeccd8421811610308143daa93d9617c52aab4a0fa1491c6",
+          "size": 2767
+        }
+      ]
+    },
+    {
+      "id": "speaker",
+      "title": "SpeakerKit · Pyannote",
+      "variant": "Core ML / глобальная диаризация",
+      "repository": "argmaxinc/speakerkit-coreml",
+      "revision": "556fc52a13327837688f02289457cded017802e9",
+      "license": "CC-BY-4.0",
+      "files": [
+        {
+          "name": "speaker_clusterer/pyannote-v4/W32A32/PldaProjector.mlmodelc/analytics/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_clusterer/pyannote-v4/W32A32/PldaProjector.mlmodelc/analytics/coremldata.bin",
+          "sha256": "3e13c8f4df77ea27cbbcdd6d083c63f5e7b3f32566cc5bf223fab92d40b81b8b",
+          "size": 243
+        },
+        {
+          "name": "speaker_clusterer/pyannote-v4/W32A32/PldaProjector.mlmodelc/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_clusterer/pyannote-v4/W32A32/PldaProjector.mlmodelc/coremldata.bin",
+          "sha256": "6f6820ccf221d4cc7c107101d0ae4d716eb224e4fdffaf8f7ca36af70ae64c40",
+          "size": 327
+        },
+        {
+          "name": "speaker_clusterer/pyannote-v4/W32A32/PldaProjector.mlmodelc/metadata.json",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_clusterer/pyannote-v4/W32A32/PldaProjector.mlmodelc/metadata.json",
+          "sha256": "acc86b4a4f542d8e7eaf84fc290fe72bd8629b0ffcc16e5b1a9e13d777abd9d8",
+          "size": 1766
+        },
+        {
+          "name": "speaker_clusterer/pyannote-v4/W32A32/PldaProjector.mlmodelc/model.mil",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_clusterer/pyannote-v4/W32A32/PldaProjector.mlmodelc/model.mil",
+          "sha256": "209e641bf4d9c3868c9dc43ab8705094997917eb2df5f5d8c8fda09fed54b1d4",
+          "size": 8128
+        },
+        {
+          "name": "speaker_clusterer/pyannote-v4/W32A32/PldaProjector.mlmodelc/weights/weight.bin",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_clusterer/pyannote-v4/W32A32/PldaProjector.mlmodelc/weights/weight.bin",
+          "sha256": "a1dbbb651a0a67fcfe5334672f459df090fa960917a6ee3a5423245a7ab92ced",
+          "size": 199040
+        },
+        {
+          "name": "speaker_clusterer/pyannote-v4/W32A32/README.txt",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_clusterer/pyannote-v4/W32A32/README.txt",
+          "sha256": "1714fe351f449b3e0d54f9b5be5219d4168fa2a56e1ab2cae509d5c38a7af915",
+          "size": 98
+        },
+        {
+          "name": "speaker_embedder/pyannote-v3/W8A16/README.txt",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_embedder/pyannote-v3/W8A16/README.txt",
+          "sha256": "c6ac9e9755ca881df5d0493e425a1841b398f7efdfa8c5a5175914587ee45310",
+          "size": 122
+        },
+        {
+          "name": "speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedder.mlmodelc/analytics/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedder.mlmodelc/analytics/coremldata.bin",
+          "sha256": "ba8405dfc9b9348ade705e052888b4bdc7fb8d079ef3ff71108a5f692d0209f2",
+          "size": 243
+        },
+        {
+          "name": "speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedder.mlmodelc/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedder.mlmodelc/coremldata.bin",
+          "sha256": "1597d6c037ac52436b5c2e1abc47e6c68483c19eeac75267dfb8795a78ec07c5",
+          "size": 370
+        },
+        {
+          "name": "speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedder.mlmodelc/metadata.json",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedder.mlmodelc/metadata.json",
+          "sha256": "29ea3421161c8344f6ea95db9b472217638a869f686f2494d10e5d11f11f4cda",
+          "size": 2367
+        },
+        {
+          "name": "speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedder.mlmodelc/model.mil",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedder.mlmodelc/model.mil",
+          "sha256": "5eee9f6aa380aef88fee604d75c5deaa23adc83c9480cb8f6dedc72803973e77",
+          "size": 451487
+        },
+        {
+          "name": "speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedder.mlmodelc/weights/weight.bin",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedder.mlmodelc/weights/weight.bin",
+          "sha256": "a02861969f47cf3a67e3b0d276e54b3c8bc3a6e43d40d77d1cccbd57da0e5795",
+          "size": 6661888
+        },
+        {
+          "name": "speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedderPreprocessor.mlmodelc/analytics/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedderPreprocessor.mlmodelc/analytics/coremldata.bin",
+          "sha256": "ce9bef9fb3125a5401300b5c5998c5d8f211094692cae780645d3e2757410f2c",
+          "size": 243
+        },
+        {
+          "name": "speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedderPreprocessor.mlmodelc/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedderPreprocessor.mlmodelc/coremldata.bin",
+          "sha256": "b4ebd0b9ce5a84768672663aff426eb19f9648d4b9f74286f0e19fc753ad76ba",
+          "size": 330
+        },
+        {
+          "name": "speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedderPreprocessor.mlmodelc/metadata.json",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedderPreprocessor.mlmodelc/metadata.json",
+          "sha256": "789f81c17dc04d469611d253684e534565fb4a008e54c722b925f1608bf87fce",
+          "size": 1979
+        },
+        {
+          "name": "speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedderPreprocessor.mlmodelc/model.mil",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedderPreprocessor.mlmodelc/model.mil",
+          "sha256": "42e552ebd7efb12ea813eceb474018dd0f46168e84ad3a1c54945bfc47be7a82",
+          "size": 14224
+        },
+        {
+          "name": "speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedderPreprocessor.mlmodelc/weights/weight.bin",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_embedder/pyannote-v3/W8A16/SpeakerEmbedderPreprocessor.mlmodelc/weights/weight.bin",
+          "sha256": "5f2c284bd22f1f7ab76901c1c6e57f82d4ebbf057fa0b924aad057f124f77a89",
+          "size": 2181696
+        },
+        {
+          "name": "speaker_segmenter/pyannote-v3/W8A16/README.txt",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_segmenter/pyannote-v3/W8A16/README.txt",
+          "sha256": "b84da4b3cdd7619435f45833d88cad15530a93fb99ef56ee6c4786d7f4664016",
+          "size": 105
+        },
+        {
+          "name": "speaker_segmenter/pyannote-v3/W8A16/SpeakerSegmenter.mlmodelc/analytics/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_segmenter/pyannote-v3/W8A16/SpeakerSegmenter.mlmodelc/analytics/coremldata.bin",
+          "sha256": "40637aa0cb2a073bc303c7ca9ee79da35fa81d2cad1ead180e93b134005b95de",
+          "size": 243
+        },
+        {
+          "name": "speaker_segmenter/pyannote-v3/W8A16/SpeakerSegmenter.mlmodelc/coremldata.bin",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_segmenter/pyannote-v3/W8A16/SpeakerSegmenter.mlmodelc/coremldata.bin",
+          "sha256": "6c356ed983b2a3332ce51299ca0f9747a35cb6c2a67b0ac24c69dbef3f989634",
+          "size": 497
+        },
+        {
+          "name": "speaker_segmenter/pyannote-v3/W8A16/SpeakerSegmenter.mlmodelc/metadata.json",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_segmenter/pyannote-v3/W8A16/SpeakerSegmenter.mlmodelc/metadata.json",
+          "sha256": "2fd6aaf6beb17b3758f5d0c5b2cf5feeacb0cc0c9267dbcd7536b247b1a5860e",
+          "size": 3757
+        },
+        {
+          "name": "speaker_segmenter/pyannote-v3/W8A16/SpeakerSegmenter.mlmodelc/model.mil",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_segmenter/pyannote-v3/W8A16/SpeakerSegmenter.mlmodelc/model.mil",
+          "sha256": "423c358915acab0d440c99f5162c17456936c2c02f7394b05ab226b9a34c122a",
+          "size": 193092
+        },
+        {
+          "name": "speaker_segmenter/pyannote-v3/W8A16/SpeakerSegmenter.mlmodelc/weights/weight.bin",
+          "url": "https://huggingface.co/argmaxinc/speakerkit-coreml/resolve/556fc52a13327837688f02289457cded017802e9/speaker_segmenter/pyannote-v3/W8A16/SpeakerSegmenter.mlmodelc/weights/weight.bin",
+          "sha256": "75ff1725ef4e58dacf9176466ec274a8a13a6132c296d6b571fb78ddad5455c4",
+          "size": 1520986
+        }
+      ]
+    },
+    {
+      "id": "tokenizer",
+      "title": "Токенизатор Whisper",
+      "variant": "Локальные файлы tokenizer",
+      "repository": "openai/whisper-large-v3-turbo",
+      "revision": "41f01f3fe87f28c78e2fbf8b568835947dd65ed9",
+      "license": "MIT",
+      "files": [
+        {
+          "name": "config.json",
+          "url": "https://huggingface.co/openai/whisper-large-v3-turbo/resolve/41f01f3fe87f28c78e2fbf8b568835947dd65ed9/config.json",
+          "sha256": "c5b526b3e3cd64cd8940dabb45e8ba726629e22d8ed389c29b552f9140daf04a",
+          "size": 1256
+        },
+        {
+          "name": "special_tokens_map.json",
+          "url": "https://huggingface.co/openai/whisper-large-v3-turbo/resolve/41f01f3fe87f28c78e2fbf8b568835947dd65ed9/special_tokens_map.json",
+          "sha256": "baea4ea09372eb4fca86b4e4346139fd73cb807d5087e9de0948e971739c3e74",
+          "size": 2186
+        },
+        {
+          "name": "tokenizer.json",
+          "url": "https://huggingface.co/openai/whisper-large-v3-turbo/resolve/41f01f3fe87f28c78e2fbf8b568835947dd65ed9/tokenizer.json",
+          "sha256": "297b13372ac43916285644fb9687add3cc62ee2a1adb60da3dc25cc94c1871fd",
+          "size": 2710337
+        },
+        {
+          "name": "tokenizer_config.json",
+          "url": "https://huggingface.co/openai/whisper-large-v3-turbo/resolve/41f01f3fe87f28c78e2fbf8b568835947dd65ed9/tokenizer_config.json",
+          "sha256": "844b642c73a91359722f47b35705f7174686df33d252695d8572cf9ac03a6389",
+          "size": 282843
+        }
+      ]
+    },
+    {
+      "id": "qwen4b",
+      "title": "Qwen3.5-4B",
+      "variant": "MLX · 4-bit",
+      "repository": "mlx-community/Qwen3.5-4B-4bit",
+      "revision": "0e7ffd5c629ef7719d4cbc04069232580bfa9d9c",
+      "license": "Apache-2.0",
+      "files": [
+        {
+          "name": "chat_template.jinja",
+          "url": "https://huggingface.co/mlx-community/Qwen3.5-4B-4bit/resolve/0e7ffd5c629ef7719d4cbc04069232580bfa9d9c/chat_template.jinja",
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+          "size": 7756
+        },
+        {
+          "name": "config.json",
+          "url": "https://huggingface.co/mlx-community/Qwen3.5-4B-4bit/resolve/0e7ffd5c629ef7719d4cbc04069232580bfa9d9c/config.json",
+          "sha256": "f3efc81b2ea8d96a45301037d3ccccbcccdef44a961845c87f286aaddbc6eaaa",
+          "size": 3366
+        },
+        {
+          "name": "model.safetensors",
+          "url": "https://huggingface.co/mlx-community/Qwen3.5-4B-4bit/resolve/0e7ffd5c629ef7719d4cbc04069232580bfa9d9c/model.safetensors",
+          "sha256": "5fb9acd0246866381cf8c5c354c6db1019f6498eec4ccb4f5edcc71ffeacb2db",
+          "size": 3034300695
+        },
+        {
+          "name": "model.safetensors.index.json",
+          "url": "https://huggingface.co/mlx-community/Qwen3.5-4B-4bit/resolve/0e7ffd5c629ef7719d4cbc04069232580bfa9d9c/model.safetensors.index.json",
+          "sha256": "52e534c41f7b97708329c85f762e5882bf48bd5955a422c6ae74eba321e6048a",
+          "size": 101944
+        },
+        {
+          "name": "tokenizer.json",
+          "url": "https://huggingface.co/mlx-community/Qwen3.5-4B-4bit/resolve/0e7ffd5c629ef7719d4cbc04069232580bfa9d9c/tokenizer.json",
+          "sha256": "87a7830d63fcf43bf241c3c5242e96e62dd3fdc29224ca26fed8ea333db72de4",
+          "size": 19989343
+        },
+        {
+          "name": "tokenizer_config.json",
+          "url": "https://huggingface.co/mlx-community/Qwen3.5-4B-4bit/resolve/0e7ffd5c629ef7719d4cbc04069232580bfa9d9c/tokenizer_config.json",
+          "sha256": "e98f1901ac6f0adff67b1d540bfa0c36ac1a0cf59eb72ed78146ef89aafa1182",
+          "size": 1139
+        }
+      ],
+      "backend": "mlx"
+    },
+    {
+      "id": "qwen9b",
+      "title": "Qwen3.5-9B",
+      "variant": "MLX · 4-bit",
+      "repository": "mlx-community/Qwen3.5-9B-4bit",
+      "revision": "8b2b98c00a6b4d291155e4890773ca8f769aee53",
+      "license": "Apache-2.0",
+      "files": [
+        {
+          "name": "chat_template.jinja",
+          "url": "https://huggingface.co/mlx-community/Qwen3.5-9B-4bit/resolve/8b2b98c00a6b4d291155e4890773ca8f769aee53/chat_template.jinja",
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+          "size": 7756
+        },
+        {
+          "name": "config.json",
+          "url": "https://huggingface.co/mlx-community/Qwen3.5-9B-4bit/resolve/8b2b98c00a6b4d291155e4890773ca8f769aee53/config.json",
+          "sha256": "a96942cb6a8a1d3f1d17514d81a1925d04362a6a3233b389d13012211baaa9f8",
+          "size": 3331
+        },
+        {
+          "name": "model-00001-of-00002.safetensors",
+          "url": "https://huggingface.co/mlx-community/Qwen3.5-9B-4bit/resolve/8b2b98c00a6b4d291155e4890773ca8f769aee53/model-00001-of-00002.safetensors",
+          "sha256": "a68b87558c6ef43f74c2bd63ce7e9092ceddc3101f3def0030774bae5f42aadd",
+          "size": 5349771222
+        },
+        {
+          "name": "model-00002-of-00002.safetensors",
+          "url": "https://huggingface.co/mlx-community/Qwen3.5-9B-4bit/resolve/8b2b98c00a6b4d291155e4890773ca8f769aee53/model-00002-of-00002.safetensors",
+          "sha256": "b0a770bf8469c7f3f18756a0e0283f1c1174344a83e059a4e483f6af4907352d",
+          "size": 600449850
+        },
+        {
+          "name": "model.safetensors.index.json",
+          "url": "https://huggingface.co/mlx-community/Qwen3.5-9B-4bit/resolve/8b2b98c00a6b4d291155e4890773ca8f769aee53/model.safetensors.index.json",
+          "sha256": "dd023913fb87cfdae27fb11dcf695117c925833796ccac3c64117d6652d8ff1e",
+          "size": 123592
+        },
+        {
+          "name": "tokenizer.json",
+          "url": "https://huggingface.co/mlx-community/Qwen3.5-9B-4bit/resolve/8b2b98c00a6b4d291155e4890773ca8f769aee53/tokenizer.json",
+          "sha256": "87a7830d63fcf43bf241c3c5242e96e62dd3fdc29224ca26fed8ea333db72de4",
+          "size": 19989343
+        },
+        {
+          "name": "tokenizer_config.json",
+          "url": "https://huggingface.co/mlx-community/Qwen3.5-9B-4bit/resolve/8b2b98c00a6b4d291155e4890773ca8f769aee53/tokenizer_config.json",
+          "sha256": "e98f1901ac6f0adff67b1d540bfa0c36ac1a0cf59eb72ed78146ef89aafa1182",
+          "size": 1139
+        }
+      ],
+      "backend": "mlx"
+    }
+  ]
+}

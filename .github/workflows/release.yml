@@ -1,0 +1,66 @@
+name: Prepare release (no public publication)
+on:
+  push:
+    tags: ['v[0-9]*.[0-9]*.[0-9]*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version without v prefix
+        required: true
+        default: '0.1.0'
+        type: string
+      upload_artifacts:
+        description: Explicitly authorize uploading the source/binary kit to GitHub Actions artifacts (not a public Release)
+        default: false
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  prepare:
+    name: Clean release dry-run and owner-gated artifact preparation
+    runs-on: macos-15
+    timeout-minutes: 100
+    # Owner must configure required reviewers before enabling public tag builds.
+    # No contents:write, gh release call, publish action or public upload exists.
+    environment: release-preparation
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select full Xcode / ARM64 prerequisites
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
+          python3 -I Tools/release.py doctor
+      - name: Validate version and tag
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$INPUT_VERSION"
+          fi
+          export VERSION
+          python3 -I -c 'import os,re; v=os.environ["VERSION"]; assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?",v), "Invalid release version"'
+          printf 'VERSION=%s\n' "$VERSION" >> "$GITHUB_ENV"
+      - name: Public source and redacted Git-history secret scan
+        run: |
+          python3 -I Tools/check-public-tree.py
+          go run github.com/zricethezav/gitleaks/v8@v8.24.3 detect --source . --redact --no-banner --exit-code 1
+      - name: Clean build / tests / binaries / DMG / checksum / matching source and relink kit
+        run: python3 -I Tools/release.py clean .build/release-dry-run --version "$VERSION" --build 64
+      - name: Explicitly authorized Actions artifact upload (never public Release)
+        if: github.event_name == 'workflow_dispatch' && inputs.upload_artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Vecta-${{ env.VERSION }}-macOS-arm64-release-kit
+          path: .build/release-dry-run/release/artifacts/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Summarize scope and publication boundary
+        run: |
+          printf '%s\n' 'PASS preparation only if all prior gates passed. No public repository/Release created. Tag runs do not upload source assets. Manual Actions upload is opt-in and owner-environment-gated. Physical hardware, real model inference and clean-user Gatekeeper are NOT TESTED on this runner.' >> "$GITHUB_STEP_SUMMARY"

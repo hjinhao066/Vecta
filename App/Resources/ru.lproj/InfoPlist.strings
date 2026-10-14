@@ -1,0 +1,4 @@
+"NSBluetoothAlwaysUsageDescription" = "Vecta подключается к выбранному диктофону PLAUD и загружает записи на этот Mac.";
+"NSLocationUsageDescription" = "Для Fast transfer macOS требует доступ к геопозиции, чтобы определить Wi‑Fi-сеть диктофона и вернуть прежнее подключение. Vecta не запрашивает координаты и не отправляет данные геопозиции.";
+"NSLocalNetworkUsageDescription" = "Fast transfer принимает записи от выбранного PLAUD по его локальной Wi‑Fi-сети без облачной передачи.";
+"NSLocationWhenInUseUsageDescription" = "Для Fast transfer macOS требует доступ к геопозиции, чтобы определить Wi‑Fi-сеть диктофона и вернуть прежнее подключение. Vecta не запрашивает координаты и не отправляет данные геопозиции.";

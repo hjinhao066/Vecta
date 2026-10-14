@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private security reporting
+    url: https://docs.github.com/en/code-security/security-advisories/working-with-repository-security-advisories/privately-reporting-a-security-vulnerability
+    about: Use the repository Security > Report a vulnerability form once enabled. If absent, request owner activation without disclosing sensitive details; see SECURITY.md.

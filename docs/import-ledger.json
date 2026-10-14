@@ -1,0 +1,614 @@
+[
+  {
+    "origin_path": "AI/Host/LocalAIHost.swift",
+    "current_path": "AI/Host/LocalAIHost.swift",
+    "original_sha256": "7ebb6384fef1d26b1fea0e71289360ea8accaaf1c73eb659d5414ac920177fad"
+  },
+  {
+    "origin_path": "AI/Local/LocalAIResourceManager.swift",
+    "current_path": "AI/Local/LocalAIResourceManager.swift",
+    "original_sha256": "f5b2970563bb1258f35afaa4ca16f29042e064fa2826cc734b44f7181bdb36f1"
+  },
+  {
+    "origin_path": "AI/Local/LocalAIWarmWorker.swift",
+    "current_path": "AI/Local/LocalAIWarmWorker.swift",
+    "original_sha256": "fede85f74534371a79b65fe688d02e2ecdf14599c521bee33214496f4786d7c3"
+  },
+  {
+    "origin_path": "AI/Local/LocalAudioReader.swift",
+    "current_path": "AI/Local/LocalAudioReader.swift",
+    "original_sha256": "d4ff2cd34b69cf8ab4768984d4946f253994dbee1e184fb194bac44ccd5fe911"
+  },
+  {
+    "origin_path": "AI/Local/LocalModelDownloader.swift",
+    "current_path": "AI/Local/LocalModelDownloader.swift",
+    "original_sha256": "0e721065afe991fe8d8891dce2a0ea1558622c405fa1c04522985b68209f31e4"
+  },
+  {
+    "origin_path": "AI/Local/LocalModelManager.swift",
+    "current_path": "AI/Local/LocalModelManager.swift",
+    "original_sha256": "f44077d5bb48716884cbc2df8e748b94f2f860039cd72b0b151bc918ad796ed6"
+  },
+  {
+    "origin_path": "AI/Local/LocalModelRegistry.swift",
+    "current_path": "AI/Local/LocalModelRegistry.swift",
+    "original_sha256": "842e100b32d94b76ec8f4933b85eb467f0e7d7992ddf4824352ac1ffbf216ad9"
+  },
+  {
+    "origin_path": "AI/MLX/Package.resolved",
+    "current_path": "AI/MLX/Package.resolved",
+    "original_sha256": "0b74ead423d7c3ff0f306a4870ec54996d5bc2e5651d264a79353e5a01058902"
+  },
+  {
+    "origin_path": "AI/MLX/Package.swift",
+    "current_path": "AI/MLX/Package.swift",
+    "original_sha256": "aa3f02d47f0cae94f1e25cdc69cfa2c062a78623b238b597168210f544b539ca"
+  },
+  {
+    "origin_path": "AI/MLX/Sources/VectaMLX/LibraryEvidence.swift",
+    "current_path": "AI/MLX/Sources/VectaMLX/LibraryEvidence.swift",
+    "original_sha256": "cd2aac25eb6f49b023d03591b76b3100f6e25a82a80098bb3c7e37169440013c"
+  },
+  {
+    "origin_path": "AI/MLX/Sources/VectaMLX/LibraryPrompt.swift",
+    "current_path": "AI/MLX/Sources/VectaMLX/LibraryPrompt.swift",
+    "original_sha256": "2ae7ae2e2bcd70337cc9d684c72f680ddde0c77bc044cf5e61d8eeb29eb2c711"
+  },
+  {
+    "origin_path": "AI/MLX/Sources/VectaMLX/SemanticPrompt.swift",
+    "current_path": "AI/MLX/Sources/VectaMLX/SemanticPrompt.swift",
+    "original_sha256": "da28fdda6c5c56393f2d7b9305600add3db9ec093390ff4f09dea2b3e6fc0feb"
+  },
+  {
+    "origin_path": "AI/MLX/Sources/VectaMLX/SemanticStream.swift",
+    "current_path": "AI/MLX/Sources/VectaMLX/SemanticStream.swift",
+    "original_sha256": "cf323c5e5fb9603ff0d3cf4cf1037ad30a2cba9c5b6ce1a84daadb5fe064c850"
+  },
+  {
+    "origin_path": "AI/MLX/Sources/VectaMLX/SpeakerInput.swift",
+    "current_path": "AI/MLX/Sources/VectaMLX/SpeakerInput.swift",
+    "original_sha256": "4bd2c042985f5630ec85cbb16ff667809794e09073f424ee20ebd35adb5b551f"
+  },
+  {
+    "origin_path": "AI/MLX/Sources/VectaMLX/SummaryPrompt.swift",
+    "current_path": "AI/MLX/Sources/VectaMLX/SummaryPrompt.swift",
+    "original_sha256": "4effa36613467ce68f7ca3131d67fa98ce7b4207adb53a834e24f69ca99747ed"
+  },
+  {
+    "origin_path": "AI/MLX/Sources/VectaMLX/Worker.swift",
+    "current_path": "AI/MLX/Sources/VectaMLX/Worker.swift",
+    "original_sha256": "a8fdd8ee9406139bc8a115603081c4218157d3509bddf1c489d9d3cf1e81d9f3"
+  },
+  {
+    "origin_path": "AI/MLX/Sources/VectaSummaryBench/Benchmark.swift",
+    "current_path": "AI/MLX/Sources/VectaSummaryBench/Benchmark.swift",
+    "original_sha256": "4a123d9043ef30f3734db233eae8ab5a6298ecc7c56bcf955f931c8c863e09ee"
+  },
+  {
+    "origin_path": "AI/MLX/Tests/VectaMLXTests/LibraryEvidenceTests.swift",
+    "current_path": "AI/MLX/Tests/VectaMLXTests/LibraryEvidenceTests.swift",
+    "original_sha256": "66c9667a190a0c16c3ee55cf8c2564254f2fa91f5cd6da1990310b3463bfd4e5"
+  },
+  {
+    "origin_path": "AI/MLX/Tests/VectaMLXTests/ResponseContractTests.swift",
+    "current_path": "AI/MLX/Tests/VectaMLXTests/ResponseContractTests.swift",
+    "original_sha256": "287728a630e7ed5d90a5777634accb6f6c2b0791c5085ce77c81b3138b6f0440"
+  },
+  {
+    "origin_path": "AI/MLX/Tests/VectaMLXTests/SemanticStreamTests.swift",
+    "current_path": "AI/MLX/Tests/VectaMLXTests/SemanticStreamTests.swift",
+    "original_sha256": "769f68a72c46b7472955dc34c7bff41b2d2c194f567492e08dd36a62030efa17"
+  },
+  {
+    "origin_path": "AI/Resources/models-mlx.json",
+    "current_path": "AI/Resources/models-mlx.json",
+    "original_sha256": "5ecdb27c47818f2437c9d8e5179a9b5dfa0cfc9d1db5bc3c53d2b48d999893dd"
+  },
+  {
+    "origin_path": "AI/Resources/models.json",
+    "current_path": "AI/Resources/models.json",
+    "original_sha256": "67069230dba7d2b622d1cf4e19abda8036ecb7b5469393e083bfd6950d061f59"
+  },
+  {
+    "origin_path": "AI/Worker/CMakeLists.txt",
+    "current_path": "AI/Worker/CMakeLists.txt",
+    "original_sha256": "4d351446d63e282eaa93a80f2f987b7c35f2bef1430bdf05f4d1e4d75e9661ab",
+    "status": "retired-source",
+    "retirement": "2026-10-14: exclusively legacy C++ inference; original hash and attribution retained"
+  },
+  {
+    "origin_path": "AI/Worker/EvidenceCoverage.hpp",
+    "current_path": "AI/Worker/EvidenceCoverage.hpp",
+    "original_sha256": "156b566887a0a67d67a3a54f93ff48b3594cce552510ccaa38174218eccd2b1d",
+    "status": "retired-source",
+    "retirement": "2026-10-14: exclusively legacy C++ inference; original hash and attribution retained"
+  },
+  {
+    "origin_path": "AI/Worker/EvidenceSchema.hpp",
+    "current_path": "AI/Worker/EvidenceSchema.hpp",
+    "original_sha256": "fe261b288e005354c69818b82b3c376c2537849df9451bde8b1cf1ef9018a7c0",
+    "status": "retired-source",
+    "retirement": "2026-10-14: exclusively legacy C++ inference; original hash and attribution retained"
+  },
+  {
+    "origin_path": "AI/Worker/ExperimentalContext.hpp",
+    "current_path": "AI/Worker/ExperimentalContext.hpp",
+    "original_sha256": "13c09208ccc7119bf8c460e75832095a82706619b0fd44f9569a33f971c4f24e",
+    "status": "retired-source",
+    "retirement": "2026-10-14: exclusively legacy C++ inference; original hash and attribution retained"
+  },
+  {
+    "origin_path": "AI/Worker/IntermediateSummarySchema.hpp",
+    "current_path": "AI/Worker/IntermediateSummarySchema.hpp",
+    "original_sha256": "e7a90fa5f5997e4b3beb8c05b16b24d1883551ee135772cc4eba5fb72a4c12e3",
+    "status": "retired-source",
+    "retirement": "2026-10-14: exclusively legacy C++ inference; original hash and attribution retained"
+  },
+  {
+    "origin_path": "AI/Worker/QwenWorker.cpp",
+    "current_path": "AI/Worker/QwenWorker.cpp",
+    "original_sha256": "35ffeb67a1a3e9d8a0687ccfbbc2e1ab6759720f3f393abb3dd682945ecb41b4",
+    "status": "retired-source",
+    "retirement": "2026-10-14: exclusively legacy C++ inference; original hash and attribution retained"
+  },
+  {
+    "origin_path": "AI/Worker/ReductionCheckpoint.hpp",
+    "current_path": "AI/Worker/ReductionCheckpoint.hpp",
+    "original_sha256": "3216b0a291ca5e1dfdb32f6e87b21623f0553bc97a73cf517613bc66ad433c5c",
+    "status": "retired-source",
+    "retirement": "2026-10-14: exclusively legacy C++ inference; original hash and attribution retained"
+  },
+  {
+    "origin_path": "AI/Worker/SemanticSummarySchema.hpp",
+    "current_path": "AI/Worker/SemanticSummarySchema.hpp",
+    "original_sha256": "a91634f1505cf308b304db0ae611d08f161c3d93b54b7decedc16de31ee7db88",
+    "status": "retired-source",
+    "retirement": "2026-10-14: exclusively legacy C++ inference; original hash and attribution retained"
+  },
+  {
+    "origin_path": "AI/Worker/SpeechWorker.swift",
+    "current_path": "AI/Worker/SpeechWorker.swift",
+    "original_sha256": "e04b6aa4e3b325ae0466ec19c27f55aa56ef31ff1ce670eb20d1cdd1110ab87c"
+  },
+  {
+    "origin_path": "AI/Worker/SummaryTokenSchema.hpp",
+    "current_path": "AI/Worker/SummaryTokenSchema.hpp",
+    "original_sha256": "7d49aed5cee47c4f4ab78f9ebab94503f6ed27787480f4c6945759f30ff305a3",
+    "status": "retired-source",
+    "retirement": "2026-10-14: exclusively legacy C++ inference; original hash and attribution retained"
+  },
+  {
+    "origin_path": "AI/Worker/VisualInputPlan.hpp",
+    "current_path": "AI/Worker/VisualInputPlan.hpp",
+    "original_sha256": "431bec39b37b2e2f11c7a86a792dc87a51e0cfed91efdfe6097a976c8e184869",
+    "status": "retired-source",
+    "retirement": "2026-10-14: exclusively legacy C++ inference; original hash and attribution retained"
+  },
+  {
+    "origin_path": "AI/Worker/WholeRecording.swift",
+    "current_path": "AI/Worker/WholeRecording.swift",
+    "original_sha256": "532575e7e1d0ca3cec0acaac43f0f0902dd0c7e7d9c3a1246a3350e22233a6f0"
+  },
+  {
+    "origin_path": "App/BetaLocalAudioExporter.swift",
+    "current_path": "Storage/VectaLocalAudioExporter.swift",
+    "original_sha256": "dc67e2fa2af7df8053e056a4484d02d5c4bbe07ba63e7d4d67938a49da6f9fc9"
+  },
+  {
+    "origin_path": "App/BetaRecordingStore.swift",
+    "current_path": "Storage/VectaRecordingStore.swift",
+    "original_sha256": "70c932883f96a2dc11ee9ae2754369eac576e5d6286401b8a45cb242879255e5"
+  },
+  {
+    "origin_path": "App/BetaSummaryFormatStore.swift",
+    "current_path": "Storage/VectaSummaryFormatStore.swift",
+    "original_sha256": "e6fd776400d046159292200fd3bbaa397dfa8775d51a73049445d4dc189c7a78"
+  },
+  {
+    "origin_path": "App/BetaSummaryModels.swift",
+    "current_path": "Domain/VectaSummaryModels.swift",
+    "original_sha256": "c6cdcd9b10d7fc4e8ad2840d3977ff9d9fb278759e25059dde521bb756aecadb"
+  },
+  {
+    "origin_path": "App/BetaTransferMetrics.swift",
+    "current_path": "Domain/VectaTransferMetrics.swift",
+    "original_sha256": "497ac1d4a0dce121c2a35ced0f81da7c9194fdd65bf791e45ad5fe6c2d49dcbe"
+  },
+  {
+    "origin_path": "LICENSE",
+    "current_path": "LICENSE",
+    "original_sha256": "9eabeaa9b8602b83e9387b815f09e73dfc163e1da72812216b4afb946aa0f262"
+  },
+  {
+    "origin_path": "NativeApp/NativeAnalysisQueue.swift",
+    "current_path": "App/NativeAnalysisQueue.swift",
+    "original_sha256": "12ab4e8e9aaa63e110fafca12a3e5a86e91cb2c4dc3cf945b6b347488b2e2b53"
+  },
+  {
+    "origin_path": "NativeApp/NativeAppRuntime.swift",
+    "current_path": "App/NativeAppRuntime.swift",
+    "original_sha256": "42eebdeca5b0d63e7d64160e51df0fc03c23edbe24768098939f06fabf678d88"
+  },
+  {
+    "origin_path": "NativeApp/NativeAssistant.swift",
+    "current_path": "App/NativeAssistant.swift",
+    "original_sha256": "aeddb658e0fc5188c60a28926862b9ebc32002a92e87c2f7cbe934f23f6f103a"
+  },
+  {
+    "origin_path": "NativeApp/NativeBatchAnalysis.swift",
+    "current_path": "App/NativeBatchAnalysis.swift",
+    "original_sha256": "9967db0a5e2a1320e575ed28760999e9f0789f17e8846791f2f0a37a310b5aa0"
+  },
+  {
+    "origin_path": "NativeApp/NativeBranding.swift",
+    "current_path": "App/NativeBranding.swift",
+    "original_sha256": "7480cd89d9fceab8a0fe989ce7a3d0a5d4fd256ef2ba44cfe3b6114cb5b3fe23"
+  },
+  {
+    "origin_path": "NativeApp/NativeCompatibility.swift",
+    "current_path": "App/NativeCompatibility.swift",
+    "original_sha256": "262298f6133ca7ae8f24d6f76af4e1d13e35fb260353377f948c0431dd6a9952"
+  },
+  {
+    "origin_path": "NativeApp/NativeControls.swift",
+    "current_path": "App/NativeControls.swift",
+    "original_sha256": "002f216f507e6d2bae099e36ef8efd4a72e31be48ac4c062f615ac2d8d3b6009"
+  },
+  {
+    "origin_path": "NativeApp/NativeDevicePicker.swift",
+    "current_path": "App/NativeDevicePicker.swift",
+    "original_sha256": "6ab5cb01137a1f10777e3f0aa6b71f7b3b57a2bd905a36ccd573a22efeaa17dc"
+  },
+  {
+    "origin_path": "NativeApp/NativeExperience.swift",
+    "current_path": "App/NativeExperience.swift",
+    "original_sha256": "6d25be0fec01e9737209645b6515445734f4e9ff2da680ac685323ab8be4235c"
+  },
+  {
+    "origin_path": "NativeApp/NativeExportSheet.swift",
+    "current_path": "App/NativeExportSheet.swift",
+    "original_sha256": "b56b34e116ab31778201874ee06f54ba9c2e3a10319645f55a53392f1667d672"
+  },
+  {
+    "origin_path": "NativeApp/NativeLibraryAI.swift",
+    "current_path": "App/NativeLibraryAI.swift",
+    "original_sha256": "ae673d73c0cda195776d16efa58e7ee6235a665e92c7c2859e135149634f88f5"
+  },
+  {
+    "origin_path": "NativeApp/NativeLibraryAIView.swift",
+    "current_path": "App/NativeLibraryAIView.swift",
+    "original_sha256": "928d3ba0fce987c351ff9c75687047bb9fc65990d175c8ad0c7cfea004ed8c2c"
+  },
+  {
+    "origin_path": "NativeApp/NativeLibraryController.swift",
+    "current_path": "App/NativeLibraryController.swift",
+    "original_sha256": "8c61bf56df5e6d20d7e0a05c2cc02dbef33533652df23c1be7e88daafed363dd"
+  },
+  {
+    "origin_path": "NativeApp/NativeLibraryTools.swift",
+    "current_path": "App/NativeLibraryTools.swift",
+    "original_sha256": "cd0c245984aa14e586c10a6cc019a029b305378602515d8c9c681b6e228b2d7a"
+  },
+  {
+    "origin_path": "NativeApp/NativeMacApp.swift",
+    "current_path": "App/NativeMacApp.swift",
+    "original_sha256": "7084d0019efeccbc561dcb80de959df7bb5a82e0e5b049a9b668fc8e8b943cb2"
+  },
+  {
+    "origin_path": "NativeApp/NativeRecognitionProgress.swift",
+    "current_path": "App/NativeRecognitionProgress.swift",
+    "original_sha256": "5fbb8de34b3f9d85952b8b6ad711071175c60745c03f0c41114accbaf0128437"
+  },
+  {
+    "origin_path": "NativeApp/NativeSpeakers.swift",
+    "current_path": "App/NativeSpeakers.swift",
+    "original_sha256": "c9f5302cf178d79a4872944b12f100f2ff663170f5a60f506f2625e20b881b76"
+  },
+  {
+    "origin_path": "NativeApp/NativeStorageLayout.swift",
+    "current_path": "App/NativeStorageLayout.swift",
+    "original_sha256": "8855bf336a58ca8e67fe126ee0bbbcf073a7e52259e6c056b7e5efd7e823e80c"
+  },
+  {
+    "origin_path": "NativeApp/NativeSummaryCatalog.swift",
+    "current_path": "App/NativeSummaryCatalog.swift",
+    "original_sha256": "12d81dceffaf3a5e4224670d277f24cbdfbc5b8f8877e42c05412c82d1a86cc8"
+  },
+  {
+    "origin_path": "NativeApp/NativeSyncSchedule.swift",
+    "current_path": "App/NativeSyncSchedule.swift",
+    "original_sha256": "fe5f1fddef80da2e9a7d10b4f90c99b8a082547d1045513c43944cf47f011bea"
+  },
+  {
+    "origin_path": "NativeApp/NativeTemplates.swift",
+    "current_path": "App/NativeTemplates.swift",
+    "original_sha256": "0bbd4cc093e705e8d08d9b7761dcaeadc249185293199695a4b71067462a37fb"
+  },
+  {
+    "origin_path": "NativeApp/NativeTheme.swift",
+    "current_path": "App/NativeTheme.swift",
+    "original_sha256": "113af07d639c80ca7cb1266961f651d2d515e718de302d1416adc861ae5b0a70"
+  },
+  {
+    "origin_path": "NativeApp/NativeUXPolicy.swift",
+    "current_path": "App/NativeUXPolicy.swift",
+    "original_sha256": "e967fbe460bb26fab431bdc95f49ce49ee0e82fb141fc1a0bea80d550b98c1d0"
+  },
+  {
+    "origin_path": "NativeApp/NativeViews.swift",
+    "current_path": [
+      "App/Views/DeviceAndFormatsViews.swift",
+      "App/Views/LibraryView.swift",
+      "App/Views/RecordingComponents.swift",
+      "App/Views/RecordingDetailView.swift",
+      "App/Views/SettingsViews.swift",
+      "App/Views/ViewComponents.swift"
+    ],
+    "original_sha256": "114a5241b15567dfa6056babcc045ba729572e7effe828c347f69472eee1412b"
+  },
+  {
+    "origin_path": "NativeApp/NativeVisualPDF.swift",
+    "current_path": "App/NativeVisualPDF.swift",
+    "original_sha256": "3ad9b5dd249e7ed88b9eeee3340646ce44ffdb5392ea0f3d0eb7c0f65e5bd393"
+  },
+  {
+    "origin_path": "NativeApp/NativeVisualSummary.swift",
+    "current_path": "App/NativeVisualSummary.swift",
+    "original_sha256": "2298c4a5651e96615589f25cd21844152e81e2274b97ea9a3e5cebdaee9c693d"
+  },
+  {
+    "origin_path": "NativeApp/NativeWaveform.swift",
+    "current_path": "App/NativeWaveform.swift",
+    "original_sha256": "5492b0edbe4be8b68eccce3f75c855ff8d5f0b965392e09a29adc42662738603"
+  },
+  {
+    "origin_path": "NativeApp/Resources/Vecta.icns",
+    "current_path": "App/Resources/Vecta.icns",
+    "original_sha256": "bf8cd801713bb1f18aeefec90d1aed8853c37ef2e94a986250339310b34bf57d"
+  },
+  {
+    "origin_path": "NativeTransport/Package.swift",
+    "current_path": "Packages/VectaTransport/Package.swift",
+    "original_sha256": "0c1f7f142982413847b9442b94f9f4b3523a4d15f4fa927955d986463c067a21"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Audio/AudioDownloadPacket.swift",
+    "current_path": "Packages/VectaTransport/Sources/Audio/AudioDownloadPacket.swift",
+    "original_sha256": "e840f7395ab551306a17ad365c76a295f17d077d5f73af33d30d76922c70d288"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Audio/EncryptedAudioHeader.swift",
+    "current_path": "Packages/VectaTransport/Sources/Audio/EncryptedAudioHeader.swift",
+    "original_sha256": "fbb928a30c344a57cb927444a041cd9f76c8048c13b530390fb4f36723ea1516"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Audio/ImportedOgg.swift",
+    "current_path": "Packages/VectaTransport/Sources/Audio/ImportedOgg.swift",
+    "original_sha256": "97486a9f3372a1f47a9ed30ce1b44d3c49b62b17706a4ac5c76c0783784d4d46"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Audio/NativeAudioConverter.swift",
+    "current_path": "Packages/VectaTransport/Sources/Audio/NativeAudioConverter.swift",
+    "original_sha256": "c3d7134b4896d72592dbdfbba312539664e313159e9aa104e82857caa2f80a91"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Audio/OggOpusReader.swift",
+    "current_path": "Packages/VectaTransport/Sources/Audio/OggOpusReader.swift",
+    "original_sha256": "9d0048df4660be1989f9e3155c70ec8d44bef4060179b5c6ce71653a5291813b"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Bluetooth/NativeBluetoothSession.swift",
+    "current_path": "Packages/VectaTransport/Sources/Bluetooth/NativeBluetoothSession.swift",
+    "original_sha256": "c65e137c1c89284eca55a86355ad935aaa22b7bc2e726daf4f42259c200708d4"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Bluetooth/NativePlaudDiscovery.swift",
+    "current_path": "Packages/VectaTransport/Sources/Bluetooth/NativePlaudDiscovery.swift",
+    "original_sha256": "b78744a601d922c61d07ca6924d2db4d4e77307d9cb7a662f0141d81ca93cee6"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/CNativeAudio/NativeAudioCodec.c",
+    "current_path": "Packages/VectaTransport/Sources/CNativeAudio/NativeAudioCodec.c",
+    "original_sha256": "73c27991f85e5c90f9eca09d08e9d02695652428d474104febde22fc722ccd07"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/CNativeAudio/include/NativeAudioCodec.h",
+    "current_path": "Packages/VectaTransport/Sources/CNativeAudio/include/NativeAudioCodec.h",
+    "original_sha256": "d2bb953750be71e1e91d0cc2e948eec7dfadf2663e455e1f75bd2d6c279e6751"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Core/CommandPayload.swift",
+    "current_path": "Packages/VectaTransport/Sources/Core/CommandPayload.swift",
+    "original_sha256": "c1de04f97b81811e678637dcd939f866fd8e2b457a4a3491317c7869c22db6a0"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Core/DeviceRegistry.swift",
+    "current_path": "Packages/VectaTransport/Sources/Core/DeviceRegistry.swift",
+    "original_sha256": "bcdd1c7d977b52e09a2f8db3c7ed0640731ec4b91aa5afb0166eb65b5f78dc6c"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Core/Discovery.swift",
+    "current_path": "Packages/VectaTransport/Sources/Core/Discovery.swift",
+    "original_sha256": "79217c44b7eaa9f4c8f12e4dab93ee51f0b83af2739c9bbb557174b06c189c3f"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Core/GATTProfile.swift",
+    "current_path": "Packages/VectaTransport/Sources/Core/GATTProfile.swift",
+    "original_sha256": "c34755df610ed820095d9be5f65d74bb0d678cd791ade3cb512d7a6642f7c5df"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Core/HandshakeChunks.swift",
+    "current_path": "Packages/VectaTransport/Sources/Core/HandshakeChunks.swift",
+    "original_sha256": "1dc4ca3fb0045c056380c399d13f9d3b27b28bc3ecd70fae12bb3d341821c431"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Core/PartnerPlatform.swift",
+    "current_path": "Packages/VectaTransport/Sources/Core/PartnerPlatform.swift",
+    "original_sha256": "c99c93755dbc2ebf3b0064bcde37ba9f5120e52b9ebe1568fe7b120b0cb372c6"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Core/PartnerRSAKey.swift",
+    "current_path": "Packages/VectaTransport/Sources/Core/PartnerRSAKey.swift",
+    "original_sha256": "411f9866dbb826c03b90611091eaa316459c523b279dea8f695285e2053bd1fd"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Core/ProtocolAdvertisement.swift",
+    "current_path": "Packages/VectaTransport/Sources/Core/ProtocolAdvertisement.swift",
+    "original_sha256": "c2a0a3935ecd70d0116f9d8fb93724d5693426be0037f124ece3fd3915394b67"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Core/ProtocolBootstrap.swift",
+    "current_path": "Packages/VectaTransport/Sources/Core/ProtocolBootstrap.swift",
+    "original_sha256": "fbfdcde974a2ed542528c8a0c390321054cdeaeb069de52f0f585fe7b0750415"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Core/ProtocolFileDeletion.swift",
+    "current_path": "Packages/VectaTransport/Sources/Core/ProtocolFileDeletion.swift",
+    "original_sha256": "e6643a6ddf311e36cad5c3fd2f17653943c00de0036b719638b343108cad0cac"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Core/ProtocolListRetryPolicy.swift",
+    "current_path": "Packages/VectaTransport/Sources/Core/ProtocolListRetryPolicy.swift",
+    "original_sha256": "2bacb0ac50c309f27fb5161224a2fc2d7b563c978db1ba6a41cfeff9d9bebe13"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Core/ProtocolResponses.swift",
+    "current_path": "Packages/VectaTransport/Sources/Core/ProtocolResponses.swift",
+    "original_sha256": "69bd7f68867dc6a0cc7ef0d60233ab3a06479634789fd5149e00a18e364b754f"
+  },
+  {
+    "origin_path": "NativeTransport/Sources/Core/SessionMaterial.swift",
+    "current_path": "Packages/VectaTransport/Sources/Core/SessionMaterial.swift",
+    "original_sha256": "239b744d7c670afa14c18d9aaaa15dbfaad1d3d6fa54a5fcdbdd8ce0c3756a0d"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/AudioCodecTests.swift",
+    "current_path": "Packages/VectaTransport/Tests/AudioCodecTests.swift",
+    "original_sha256": "eaaa72c6ae28180e0e4d1ad1a0f25841e98a4fbb5fd66dcc319389d84fcfd8a2"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/AudioProtocolTests.swift",
+    "current_path": "Packages/VectaTransport/Tests/AudioProtocolTests.swift",
+    "original_sha256": "09b4bfb39880dd0130febb72853af9c4ceeb0527690bc07cb8a13d8826648e1d"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/CommandPayloadTests.swift",
+    "current_path": "Packages/VectaTransport/Tests/CommandPayloadTests.swift",
+    "original_sha256": "1142028c2ec108e964a87335a78383304778786baf19b396ac2093e60b732da9"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/DeviceRegistryTests.swift",
+    "current_path": "Packages/VectaTransport/Tests/DeviceRegistryTests.swift",
+    "original_sha256": "ef3063307d6d519fbcff693ab976756bdd80f045820088f26e33957a3f97adf2"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/DiscoveryTests.swift",
+    "current_path": "Packages/VectaTransport/Tests/DiscoveryTests.swift",
+    "original_sha256": "4cdc832d58b936764c7f64e2f7fbdd3da0adea49749b6031b1a8b90eda20de6f"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/FileDeletionTests.swift",
+    "current_path": "Packages/VectaTransport/Tests/FileDeletionTests.swift",
+    "original_sha256": "a1de282d357f4d9ead00be37de875a315ff18b0e61b1a9634b6313c06ff16505"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/Fixtures/synthetic-mono-opus-1s.hex",
+    "current_path": "Packages/VectaTransport/Tests/Fixtures/synthetic-mono-opus-1s.hex",
+    "original_sha256": "80e2ee591bbe1b33f683175d5b229057875002b50ed3687b4edb0ecb2b5f4ceb"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/Fixtures/synthetic-mono-opus-1s.ogg.hex",
+    "current_path": "Packages/VectaTransport/Tests/Fixtures/synthetic-mono-opus-1s.ogg.hex",
+    "original_sha256": "4fa447fbf61ebf11cda7611fd813eb0ed81be1741cc14e28ad1427d7ed404f25"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/GATTProfileTests.swift",
+    "current_path": "Packages/VectaTransport/Tests/GATTProfileTests.swift",
+    "original_sha256": "719d893a4e8e2c49d5a66d67635eb51062acb89109bcc06991f02e2426aa9965"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/HandshakeChunksTests.swift",
+    "current_path": "Packages/VectaTransport/Tests/HandshakeChunksTests.swift",
+    "original_sha256": "2e4f3fc53fbba182b24115bed56dd01e4688994760c1c89a11b5d769d1cd5603"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/ListRetryTests.swift",
+    "current_path": "Packages/VectaTransport/Tests/ListRetryTests.swift",
+    "original_sha256": "6b6aa0b09d00b29ec78ef1b3d81b8c924e082a865acde0797a95094f583cd6a5"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/PartnerPlatformTests.swift",
+    "current_path": "Packages/VectaTransport/Tests/PartnerPlatformTests.swift",
+    "original_sha256": "db2a727d2acaeca155fad7d672568d343e1f2dca7c413f9c75ad1ee51a5ff745"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/PartnerRSAKeyTests.swift",
+    "current_path": "Packages/VectaTransport/Tests/PartnerRSAKeyTests.swift",
+    "original_sha256": "963a6414bcd4448feedf344c662e904e113ae7f33dac9f3299cde2f86cd2ff63"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/ProtocolAdvertisementTests.swift",
+    "current_path": "Packages/VectaTransport/Tests/ProtocolAdvertisementTests.swift",
+    "original_sha256": "59d879441d50ade3fad3f98e19583fbe3364ef004274de3ed434a06d5ffcedfd"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/ProtocolWireTests.swift",
+    "current_path": "Packages/VectaTransport/Tests/ProtocolWireTests.swift",
+    "original_sha256": "368d9c28fb7661cc34b5c724e4ad7dfe6ca74f8b1ee42d6b21031e12e348effc"
+  },
+  {
+    "origin_path": "NativeTransport/Tests/SessionMaterialTests.swift",
+    "current_path": "Packages/VectaTransport/Tests/SessionMaterialTests.swift",
+    "original_sha256": "3cbd77dd4e95d162e684d1b2d9948860ea5499d535a43d51802d375994c1156c"
+  },
+  {
+    "origin_path": "NativeTransport/build-native-codecs.sh",
+    "current_path": "Packages/VectaTransport/build-native-codecs.sh",
+    "original_sha256": "c8483b26181afeb7ba756078dcf05f5fbbc9b810995c76c45427dd5d378f53d9"
+  },
+  {
+    "origin_path": "Package.resolved",
+    "current_path": "Package.resolved",
+    "original_sha256": "c382f04ce45a83da0a721c0c46a061a25bacb578b40adad257805052a63a26aa"
+  },
+  {
+    "origin_path": "Production/RuntimeOwnership.swift",
+    "current_path": "App/Lifecycle/RuntimeOwnership.swift",
+    "original_sha256": "7885333d905fe1a328bd8db5c32ec50b0a92babc7a6ec77b39ef07a07cb795d1"
+  },
+  {
+    "origin_path": "Shared/AILibrarySearch.swift",
+    "current_path": "Domain/AILibrarySearch.swift",
+    "original_sha256": "9df84da5949415ead6aaa3b3422256db3c3fea1068b4febc138ce749e7ea0a2f"
+  },
+  {
+    "origin_path": "Shared/AIProcessing.swift",
+    "current_path": "Domain/AIProcessing.swift",
+    "original_sha256": "bd0fd444786c5d0b6b1cd9171611da4a0b93393ab4da601c93da8893cf90c0ba"
+  },
+  {
+    "origin_path": "Shared/AIStreamingRecognition.swift",
+    "current_path": "Domain/AIStreamingRecognition.swift",
+    "original_sha256": "b193102731dbef990c9ef2a54047ce10c7d87a966b3063d7657047cf2d20100c"
+  },
+  {
+    "origin_path": "Shared/AITranscriptCorpus.swift",
+    "current_path": "Domain/AITranscriptCorpus.swift",
+    "original_sha256": "e44f380333662c9697046f430380e96289571d535f439994f23e43b28a67b02a"
+  },
+  {
+    "origin_path": "Shared/AITranscriptIndexStore.swift",
+    "current_path": "Domain/AITranscriptIndexStore.swift",
+    "original_sha256": "46f80a711e3f6ed5025e531c729e66a96175351d971630774993f32749251d66"
+  },
+  {
+    "origin_path": "Shared/LocalAIFileStore.swift",
+    "current_path": "Domain/LocalAIFileStore.swift",
+    "original_sha256": "c82342e9a7eef65daa2b3f35dc597f0d00646596a17769f5d8d30ea59a7b2778"
+  },
+  {
+    "origin_path": "Shared/PlaudDeviceModel.swift",
+    "current_path": "Domain/VectaDeviceModel.swift",
+    "original_sha256": "6a2225dfa27c3ab882cde2c8be17d9d75061e8cc1ba6adfffae4f7506269830e"
+  }
+]

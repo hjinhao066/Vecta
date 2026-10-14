@@ -1,0 +1,17 @@
+name: Feature request
+description: Propose a macOS/local-only improvement.
+body:
+  - type: markdown
+    attributes:
+      value: Do not include private recordings, documents, credentials or device identifiers. Local-only AI and independent macOS transport are project boundaries.
+  - type: textarea
+    id: goal
+    attributes:
+      label: User goal and proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Data compatibility and privacy considerations
+      description: Explain how existing data and explicit authorization would be preserved.

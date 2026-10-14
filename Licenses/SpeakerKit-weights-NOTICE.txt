@@ -1,0 +1,8 @@
+SpeakerKit model weights are separate from the MIT framework.
+Publisher: Argmax, Inc.
+Source: https://huggingface.co/argmaxinc/speakerkit-coreml
+Pinned model card: https://huggingface.co/argmaxinc/speakerkit-coreml/blob/556fc52a13327837688f02289457cded017802e9/README.md
+The pinned card declares Creative Commons Attribution 4.0 for model weights.
+License: https://creativecommons.org/licenses/by/4.0/
+Vecta downloads model weights only after user action and does not bundle them.
+This notice does not replace upstream terms for other downloaded models.

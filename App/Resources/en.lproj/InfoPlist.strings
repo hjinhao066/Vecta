@@ -1,0 +1,4 @@
+"NSBluetoothAlwaysUsageDescription" = "Vecta connects to your selected PLAUD recorder and downloads recordings to this Mac.";
+"NSLocationUsageDescription" = "For Fast transfer, macOS requires location access to identify the recorder’s Wi-Fi network and restore your previous connection. Vecta does not request coordinates or transmit location data.";
+"NSLocalNetworkUsageDescription" = "Fast transfer receives recordings from your selected PLAUD over its local Wi-Fi network, without cloud transfer.";
+"NSLocationWhenInUseUsageDescription" = "For Fast transfer, macOS requires location access to identify the recorder’s Wi-Fi network and restore your previous connection. Vecta does not request coordinates or transmit location data.";

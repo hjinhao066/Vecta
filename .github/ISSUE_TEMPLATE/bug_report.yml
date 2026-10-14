@@ -1,0 +1,42 @@
+name: Bug report (non-sensitive)
+description: Report a reproducible problem with synthetic input only.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do NOT post security exploit details, credentials, tokens, recordings,
+        transcripts, embeddings, documents, serial IDs, Keychain exports or private
+        logs. Use SECURITY.md for private reporting. Remove identifying paths.
+        Synthetic fixture success is not evidence of physical device acceptance.
+  - type: input
+    id: version
+    attributes:
+      label: Vecta version / build
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: macOS version and Apple Silicon family (no serial number)
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction using synthetic input
+      description: Describe expected and actual behavior. Do not attach personal files or logs.
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Verification scope
+      options:
+        - Model-free fixture
+        - Local native executable
+        - Real model on synthetic input
+        - Physical recorder (no device identifiers)
+        - Clean-user installation
+        - Not tested
+    validations:
+      required: true

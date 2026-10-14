@@ -1,0 +1,16 @@
+Vecta
+
+This source tree contains material adapted from PinPoint:
+https://github.com/dans-huang/PinPoint
+Upstream baseline: d774b54 (Apache License 2.0).
+
+Retained/adapted material includes recording compatibility schemas, summary and
+export helpers. The recording repository, device registry, device authorization,
+macOS build pipeline and migration implementation have been replaced or added
+for Vecta. See docs/PROVENANCE.md and docs/import-ledger.json for file origin.
+Neither this notice nor a code rename claims clean-room independence of all
+retained material. PLAUD is a third-party device/platform name. Vecta is not
+represented as an official PLAUD application.
+
+Third-party framework, codec and model licenses are separate; see
+ docs/DEPENDENCIES.md and bundled LocalAI/Licenses.
