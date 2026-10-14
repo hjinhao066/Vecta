@@ -1,6 +1,39 @@
 # Vecta 0.1.0 developer-preview verification
 
-Updated: 15 October 2026. Apple Silicon, macOS 15+, build 65 release preparation.
+Updated: 15 October 2026. Apple Silicon, macOS 15+, build 65 published developer preview.
+
+## Published result — 15 October 2026
+
+[Vecta 0.1.0 developer preview, build 65](https://github.com/olgvroe/Vecta/releases/tag/v0.1.0)
+is public. The tag and all binary/source/relink assets bind to commit
+`6bb777beaf9535fb769221e479328a421c6939d2`, not later documentation-only updates.
+
+- [Independent CI 38648615369](https://github.com/olgvroe/Vecta/actions/runs/38648615369):
+  all three source/security, model-free Mac and full ARM64 package gates **PASS**.
+- [Clean release preparation 38648614542](https://github.com/olgvroe/Vecta/actions/runs/38648614542):
+  **PASS**, including 66 packaging tests, 13 native executable regressions,
+  55 Speech configuration checks, 153 transport tests, 18 MLX tests,
+  production source/bundle binding, actual LAME relinking and DMG mount/copy checks.
+- Downloaded kit hashes independently checked; all 234 archived source files
+  match the release commit byte-for-byte. Local DMG integrity, read-only mount,
+  build 65/arm64 identity and deep/strict signature checks **PASS**; no launch/install.
+- DMG SHA-256: `920befcfc88f180e42458b7254428227c5d56e86d69a670cf5207b5da88c7d8b`.
+- Seven release assets: DMG, matching source, LAME relink kit, component licenses,
+  SHA256SUMS, build release notes and artifact-verification.json. The latter's
+  `published: false` records its preparation-time state, not current visibility.
+- GitHub Private Vulnerability Reporting enabled; the anonymous security page
+  shows **Report a vulnerability** and the form route returns HTTP 200/sign-in.
+  No test vulnerability report was submitted.
+- Main/develop require the three CI checks with strict updates; force-push and
+  deletion disabled. Version-tag update/deletion rules active. Release preparation
+  requires owner review and is restricted to main/v* refs. Owner/admin bypass and
+  self-review remain enabled for this single-maintainer repository; independent
+  reviewer approval is not claimed. Issues/Discussions are disabled.
+
+The preparation chronology below records earlier failures and fixes. Statements
+that a hosted rerun or release is pending describe those earlier source snapshots;
+the completed evidence above supersedes them. Installation, signing and hardware
+limits in **Not claimed** remain unchanged.
 
 ## Distribution scope
 

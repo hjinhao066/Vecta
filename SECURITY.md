@@ -3,9 +3,9 @@
 ## Private reporting
 
 Use [GitHub Private Vulnerability Reporting](https://github.com/olgvroe/Vecta/security/advisories/new)
-for this repository. At public launch, the maintainer must enable the form and
-verify that **Security → Advisories → Report a vulnerability** is available before
-releasing binary assets. The form is not assumed to work during private staging.
+for this repository. It was enabled and its public **Report a vulnerability**
+entry point verified on 15 October 2026 before binary release. Signing in to
+GitHub is required to submit a private report. No end-to-end test report was sent.
 
 If it is unavailable, do not post sensitive details publicly. Contact the
 maintainer through an already trusted private channel, or make a non-sensitive

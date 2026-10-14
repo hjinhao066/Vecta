@@ -7,7 +7,7 @@ on-device, save speaker profiles, and export PDF reports. Vecta is a native macO
 app for Apple Silicon Macs with **8 GB of unified memory or more** using the 4B
 model. The interface supports **English and Russian**.
 
-[Download the developer preview](https://github.com/olgvroe/Vecta/releases/latest)
+[Download the developer preview](https://github.com/olgvroe/Vecta/releases/tag/v0.1.0)
 · [Build from source](docs/BUILD.md)
 · [Installation](docs/INSTALL.md)
 
