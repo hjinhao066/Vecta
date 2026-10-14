@@ -146,7 +146,7 @@ public issue.
 
 ## Build and contribute
 
-Install full Xcode 26.0+ with Swift 6.2+/Metal tools, Python 3.9+, Git, make and
+Install full Xcode 26.4+ with Swift 6.3+/Metal tools, Python 3.9+, Git, make and
 curl. From the source root, using a new output directory:
 
 ```sh

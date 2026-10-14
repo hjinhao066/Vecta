@@ -54,12 +54,12 @@ fetch_source libogg-1.3.5 tar.xz https://downloads.xiph.org/releases/ogg/libogg-
 fetch_source libvorbis-1.3.7 tar.xz https://downloads.xiph.org/releases/vorbis/libvorbis-1.3.7.tar.xz
 mkdir "$task_prefix"
 task_jobs="$(sysctl -n hw.ncpu)"
-(cd "$task_codec_root/work/opus-1.5.2" && bash "$task_codec_root/sources/opus-1.5.2/opus-1.5.2/configure" --prefix="$task_prefix" --disable-shared --enable-static --disable-extra-programs --disable-doc --enable-custom-modes && make -j "$task_jobs" && make install)
-(cd "$task_codec_root/work/lame-3.100" && bash "$task_codec_root/sources/lame-3.100/lame-3.100/configure" --prefix="$task_prefix" --disable-shared --enable-static --disable-frontend --disable-decoder && make -j "$task_jobs" && make install)
-(cd "$task_codec_root/work/libogg-1.3.5" && bash "$task_codec_root/sources/libogg-1.3.5/libogg-1.3.5/configure" --prefix="$task_prefix" --disable-shared --enable-static && make -j "$task_jobs" && make install)
+(cd "$task_codec_root/work/opus-1.5.2" && bash "$task_codec_root/sources/opus-1.5.2/opus-1.5.2/configure" --prefix="$task_prefix" --disable-maintainer-mode --disable-shared --enable-static --disable-extra-programs --disable-doc --enable-custom-modes && make -j "$task_jobs" && make install)
+(cd "$task_codec_root/work/lame-3.100" && bash "$task_codec_root/sources/lame-3.100/lame-3.100/configure" --prefix="$task_prefix" --disable-maintainer-mode --disable-shared --enable-static --disable-frontend --disable-decoder && make -j "$task_jobs" && make install)
+(cd "$task_codec_root/work/libogg-1.3.5" && bash "$task_codec_root/sources/libogg-1.3.5/libogg-1.3.5/configure" --prefix="$task_prefix" --disable-maintainer-mode --disable-shared --enable-static && make -j "$task_jobs" && make install)
 # libvorbis 1.3.7's legacy Darwin flag is unsupported by modern arm64 ld.
 sed -i.bak 's/-force_cpusubtype_ALL//g' "$task_codec_root/sources/libvorbis-1.3.7/libvorbis-1.3.7/configure"
-(cd "$task_codec_root/work/libvorbis-1.3.7" && PKG_CONFIG_PATH="$task_prefix/lib/pkgconfig" LDFLAGS="-L$task_prefix/lib" CPPFLAGS="-I$task_prefix/include" bash "$task_codec_root/sources/libvorbis-1.3.7/libvorbis-1.3.7/configure" --prefix="$task_prefix" --with-ogg="$task_prefix" --disable-shared --enable-static --disable-examples && make -j "$task_jobs" && make install)
+(cd "$task_codec_root/work/libvorbis-1.3.7" && PKG_CONFIG_PATH="$task_prefix/lib/pkgconfig" LDFLAGS="-L$task_prefix/lib" CPPFLAGS="-I$task_prefix/include" bash "$task_codec_root/sources/libvorbis-1.3.7/libvorbis-1.3.7/configure" --prefix="$task_prefix" --disable-maintainer-mode --with-ogg="$task_prefix" --disable-shared --enable-static --disable-examples && make -j "$task_jobs" && make install)
 mkdir "$task_prefix/licenses"
 for name in opus-1.5.2 lame-3.100 libogg-1.3.5 libvorbis-1.3.7; do
     label="${name%-*}"

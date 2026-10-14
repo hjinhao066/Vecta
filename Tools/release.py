@@ -19,7 +19,7 @@ def run(*args, cwd=ROOT, env=None):
     subprocess.run([str(a) for a in args], cwd=cwd, env=env, check=True)
 
 
-def doctor():
+def doctor(model_free=False):
     if platform.system() != 'Darwin' or platform.machine() != 'arm64':
         raise SystemExit('A native Apple Silicon Mac is required; do not build under Rosetta.')
     major = int(platform.mac_ver()[0].split('.')[0])
@@ -31,8 +31,9 @@ def doctor():
     version = subprocess.check_output(['xcrun', 'swiftc', '--version'], text=True)
     import re
     match = re.search(r'Swift version (\d+)\.(\d+)', version)
-    if not match or tuple(map(int, match.groups())) < (6, 2):
-        raise SystemExit('Select full Xcode 26.0+ (Swift 6.2+); Command Line Tools alone cannot compile MLX Metal resources.')
+    minimum = (6, 2) if model_free else (6, 3)
+    if not match or tuple(map(int, match.groups())) < minimum:
+        raise SystemExit('Select Swift 6.2+ for model-free checks or full Xcode 26.4+ (Swift 6.3+) for MLX Metal builds.')
     if shutil.disk_usage(ROOT).free < 4*1024**3:
         raise SystemExit('At least4 GB free build space is required. Preserve existing outputs/user data; choose a volume with more space.')
     run('xcodebuild', '-version')
@@ -81,7 +82,8 @@ def export_source(destination):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='action', required=True)
-    sub.add_parser('doctor')
+    prerequisites = sub.add_parser('doctor')
+    prerequisites.add_argument('--model-free', action='store_true', help='Check the Swift 6.2 source-test toolchain without MLX build requirements')
     tests = sub.add_parser('check'); tests.add_argument('--heavy', action='store_true')
     source = sub.add_parser('export'); source.add_argument('output', type=Path)
     for name in ('build', 'clean'):
@@ -91,7 +93,7 @@ def main():
         build.add_argument('--build', default='65')
     args = parser.parse_args()
     if args.action == 'doctor':
-        doctor(); return
+        doctor(args.model_free); return
     if args.action == 'check':
         check(args.heavy); return
     out = args.output.absolute()

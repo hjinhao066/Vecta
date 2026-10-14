@@ -50,6 +50,17 @@ failed because Go was absent on the macOS runner; a SHA-pinned setup-go step now
 installs the compiler for the pinned secret scanner. Neither failed run produced
 a releasable kit. Current local automated checks pass; hosted retries are pending.
 
+Further hosted checks exposed two build-environment assumptions. Run
+[38645146251](https://github.com/olgvroe/Vecta/actions/runs/38645146251) hit libogg's
+default maintainer-mode regeneration, which depended on an unavailable Automake.
+All four codec configure calls now explicitly disable maintainer mode, using the
+SHA-verified release tarballs' generated build files. A fresh local codec build
+and integrity seal passed. Run [38645146429](https://github.com/olgvroe/Vecta/actions/runs/38645146429)
+reached MLX resolution but its pinned mlx-swift requires Swift 6.3, not 6.2.
+Production CI/preparation now use macos-26 with Xcode 26.4.1; macOS 15 remains the
+application deployment target and model-free runner. Dependency revisions were
+not changed. Hosted retries remain required.
+
 **Build 65 publication requires a successful current-source hosted rerun and a
 matching verified production kit.** Check the commit/tag's Actions runs and the
 release's artifact-verification report for completed gates. This source report

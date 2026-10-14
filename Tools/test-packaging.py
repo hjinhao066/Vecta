@@ -219,6 +219,14 @@ class CodecInstallTests(FixtureCase):
         self.prefix = self.root / 'install'
         install_fixture(self.prefix)
 
+    def test_release_codec_build_disables_autotools_regeneration(self):
+        script = (ROOT / 'Packages/VectaTransport/build-native-codecs.sh').read_text()
+        configure_lines = [line for line in script.splitlines()
+                           if '/configure" --prefix=' in line]
+        self.assertEqual(len(configure_lines), 4)
+        for line in configure_lines:
+            self.assertIn('--disable-maintainer-mode', line)
+
     def test_complete_installed_inputs_verify(self):
         expected = CODECS['verify_install'](self.prefix)
         self.assertTrue(CODECS['REQUIRED'] <= expected['files'].keys())

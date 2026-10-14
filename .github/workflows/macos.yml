@@ -25,7 +25,7 @@ jobs:
           python3 -I Tools/check-public-tree.py
           python3 -I Tools/test-packaging.py
       - name: Validate Actions workflows
-        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
       - name: Secret scan (redacted; source and Git history)
         run: go run github.com/zricethezav/gitleaks/v8@v8.24.3 detect --source . --redact --no-banner --exit-code 1
   model-free:
@@ -39,7 +39,7 @@ jobs:
       - name: Select full Xcode and validate ARM64 toolchain
         run: |
           sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
-          python3 -I Tools/release.py doctor
+          python3 -I Tools/release.py doctor --model-free
       - name: Core / UI-state / voices / localization / prompts / local-AI / legacy
         run: python3 -I Tools/release.py check
       - name: Native transport and actual codecs
@@ -51,7 +51,7 @@ jobs:
   full-build:
     name: Full ARM64 Speech MLX app package
     needs: [source-security, model-free]
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 90
     env:
       VECTA_DEPENDENCY_CACHE: ${{ github.workspace }}/.build/dependency-cache
@@ -61,12 +61,12 @@ jobs:
           persist-credentials: false
       - name: Select pinned Xcode
         run: |
-          sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
+          sudo xcode-select --switch /Applications/Xcode_26.4.1.app/Contents/Developer
           python3 -I Tools/release.py doctor
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .build/dependency-cache
-          key: source-repositories-${{ runner.os }}-${{ runner.arch }}-xcode26.3-${{ hashFiles('Package.resolved', 'AI/MLX/Package.resolved') }}
+          key: source-repositories-${{ runner.os }}-${{ runner.arch }}-xcode26.4.1-${{ hashFiles('Package.resolved', 'AI/MLX/Package.resolved') }}
       - name: Build workers, app, tests, relink kit and DMG without models
         run: python3 -I Tools/release.py build .build/ci-release --version 0.1.0 --build 65
       - name: Record acceptance boundaries

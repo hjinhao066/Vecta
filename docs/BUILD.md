@@ -2,12 +2,14 @@
 
 ## Supported build environment
 
-Full product: native Apple Silicon (arm64), macOS 15 or later, full Xcode 26.0+
-with Swift 6.2+, accepted Xcode license, Python 3.9+, Git, make and curl. Xcode
+Full product: native Apple Silicon (arm64), macOS 15 or later, full Xcode 26.4+
+with Swift 6.3+, accepted Xcode license, Python 3.9+, Git, make and curl. Xcode
 Command Line Tools alone are insufficient: MLX needs the Metal compiler and
 resource bundles. Select Xcode in Settings > Locations > Command Line Tools.
-The local release check records the exact Xcode/Swift versions used; CI selects
-Xcode 26.3 on the standard ARM64 `macos-15` runner and fails on the wrong platform.
+The local release check records the exact Xcode/Swift versions used; Production CI selects
+Xcode 26.4.1 on the ARM64 `macos-26` runner: pinned MLX requires Swift 6.3.
+Model-free checks also run on `macos-15` with Xcode 26.3. The app deployment target
+remains macOS 15; a newer build host does not establish minimum-OS acceptance.
 At least 8 GB RAM and 8 GB free build space are recommended; larger builds need
 more headroom. Real 9B inference requires at least 16 GB unified memory.
 

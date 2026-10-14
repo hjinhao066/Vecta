@@ -29,7 +29,8 @@ component-license archive and release notes. Never omit the matching LAME kit.
    it BEFORE enabling tag workflows; merely naming it in YAML does not enable
    review protection. Actions environment/branch controls are not verified locally.
 6. Run macOS CI on GitHub and review runner/toolchain compatibility and quotas.
-   Standard macos-15 is ARM64, with7 GB RAM; no large models are downloaded in CI.
+   Model-free checks use ARM64 macos-15; full packages use macos-26/Xcode26.4.1
+   because pinned MLX requires Swift6.3. No model weights are downloaded in CI.
 7. Perform clean-user downloaded/quarantined DMG first launch, no-model/no-credential
    onboarding, permissions and migration acceptance on a compatible Mac. Reconfirm
    hardware/model/long-recording acceptance where the intended support claim needs it.

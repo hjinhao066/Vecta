@@ -21,7 +21,7 @@ concurrency:
 jobs:
   prepare:
     name: Clean release dry-run and owner-gated artifact preparation
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 100
     # Owner must configure required reviewers before enabling public tag builds.
     # No contents:write, gh release call, publish action or public upload exists.
@@ -33,7 +33,7 @@ jobs:
           persist-credentials: false
       - name: Select full Xcode / ARM64 prerequisites
         run: |
-          sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
+          sudo xcode-select --switch /Applications/Xcode_26.4.1.app/Contents/Developer
           python3 -I Tools/release.py doctor
       - name: Validate version and tag
         env:

@@ -24,7 +24,7 @@ def main():
         if spec.get('permissions') != {'contents': 'read'}:
             raise ValueError('Workflow must not have publication permissions')
         for job in spec['jobs'].values():
-            if job['runs-on'] not in {'macos-15', 'ubuntu-24.04'}:
+            if job['runs-on'] not in {'macos-15', 'macos-26', 'ubuntu-24.04'}:
                 raise ValueError('Unexpected/unpinned runner')
             for step in job['steps']:
                 if 'uses' in step and not re.fullmatch(r'[\w.-]+/[\w./-]+@[0-9a-f]{40}', step['uses']):
