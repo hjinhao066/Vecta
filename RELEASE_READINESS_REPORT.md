@@ -41,6 +41,15 @@ on a large numeric expression. The full build was skipped. The expression is now
 split into typed intermediate values; exact reservation parity and 8/16 GB model
 policy regressions were added. Local core/UI-state checks passed after that fix.
 
+The next run [38644518982](https://github.com/olgvroe/Vecta/actions/runs/38644518982)
+passed source/security and the source-level Mac checks, then hit a second Swift 6.2
+expression limit in the transport test fixture builder. Its byte concatenation
+has been split into appends without changing the fixture. All 153 transport tests
+pass locally. Release preparation [38644698458](https://github.com/olgvroe/Vecta/actions/runs/38644698458)
+failed because Go was absent on the macOS runner; a SHA-pinned setup-go step now
+installs the compiler for the pinned secret scanner. Neither failed run produced
+a releasable kit. Current local automated checks pass; hosted retries are pending.
+
 **Build 65 publication requires a successful current-source hosted rerun and a
 matching verified production kit.** Check the commit/tag's Actions runs and the
 release's artifact-verification report for completed gates. This source report

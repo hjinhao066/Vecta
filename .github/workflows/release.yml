@@ -47,6 +47,11 @@ jobs:
           export VERSION
           python3 -I -c 'import os,re; v=os.environ["VERSION"]; assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?",v), "Invalid release version"'
           printf 'VERSION=%s\n' "$VERSION" >> "$GITHUB_ENV"
+      - name: Install Go for the pinned source scanner
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        with:
+          go-version: '1.24.6'
+          cache: false
       - name: Public source and redacted Git-history secret scan
         run: |
           python3 -I Tools/check-public-tree.py

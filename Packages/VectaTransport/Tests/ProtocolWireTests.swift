@@ -199,6 +199,12 @@ final class ProtocolWireTests: XCTestCase {
         XCTAssertThrowsError(try session.decodeAudioFile(ciphertextAndTag: Data(repeating: 0, count: 15)))
     }
     private func page(request: UInt32 = 99, total: UInt8, start: UInt8, session: UInt32, size: UInt32) -> Data {
-        Data([1, 0x1a, 0] + le(request) + [total, 0, start, 0] + le(session) + le(size) + [2, 3])
+        var data = Data([1, 0x1a, 0])
+        data.append(contentsOf: le(request))
+        data.append(contentsOf: [total, 0, start, 0])
+        data.append(contentsOf: le(session))
+        data.append(contentsOf: le(size))
+        data.append(contentsOf: [2, 3])
+        return data
     }
 }
