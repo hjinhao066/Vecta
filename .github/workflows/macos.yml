@@ -68,6 +68,6 @@ jobs:
           path: .build/dependency-cache
           key: source-repositories-${{ runner.os }}-${{ runner.arch }}-xcode26.3-${{ hashFiles('Package.resolved', 'AI/MLX/Package.resolved') }}
       - name: Build workers, app, tests, relink kit and DMG without models
-        run: python3 -I Tools/release.py build .build/ci-release --version 0.1.0 --build 64
+        run: python3 -I Tools/release.py build .build/ci-release --version 0.1.0 --build 65
       - name: Record acceptance boundaries
         run: printf '%s\n' 'PASS local source/bundle/DMG checks if preceding steps passed. NOT TESTED — real model inference, physical recorder, clean-user Gatekeeper. No model weights downloaded; no publication.' >> "$GITHUB_STEP_SUMMARY"

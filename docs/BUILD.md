@@ -22,7 +22,7 @@ locked in both Package.resolved files. Neither builder downloads model weights.
 From the source root, using a NEW output directory:
 
 ```sh
-python3 -I Tools/release.py build dist/Vecta-0.1.0 --version 0.1.0 --build 64
+python3 -I Tools/release.py build dist/Vecta-0.1.0 --version 0.1.0 --build 65
 ```
 
 This checks prerequisites, public source, core/UI-state/speaker/localization/
@@ -47,7 +47,7 @@ The generated DMG is ad-hoc signed, not notarized. See [installation](INSTALL.md
 ## Clean public-source build
 
 ```sh
-python3 -I Tools/release.py clean .build/clean-release --version 0.1.0 --build 64
+python3 -I Tools/release.py clean .build/clean-release --version 0.1.0 --build 65
 ```
 
 Copies only explicitly approved public files into a NEW isolated directory, then

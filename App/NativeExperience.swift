@@ -2,6 +2,9 @@ import AppKit
 import SwiftUI
 import CryptoKit
 import AVFoundation
+#if VECTA_DEVELOPMENT
+import NotePinTransport
+#endif
 
 enum NativeDestination: String { case library, device, ai, formats, settings,tasks }
 
@@ -402,6 +405,58 @@ actor NativeConversationRefresh {
     }
 
     #if VECTA_DEVELOPMENT
+    func preparePublicDemo(root:URL) throws {
+        let date=ISO8601DateFormatter().date(from:"2026-10-14T10:30:00Z")!
+        let audio=root.appendingPathComponent("synthetic.wav")
+        let format=AVAudioFormat(standardFormatWithSampleRate:16000,channels:1)!
+        let buffer=AVAudioPCMBuffer(pcmFormat:format,frameCapacity:768000)!
+        buffer.frameLength=768000
+        for frame in 0..<Int(buffer.frameLength) {
+            let time=Double(frame)/16000
+            buffer.floatChannelData![0][frame]=Float(sin(time*2*Double.pi*180)*(0.06+0.25*abs(sin(time*2.3))))
+        }
+        do {let file=try AVAudioFile(forWriting:audio,settings:format.settings);try file.write(from:buffer)}
+        let identity=NativeRecordingIdentity(serialNumber:"SYNTHETIC",sessionID:Int(date.timeIntervalSince1970))
+        let recording=VectaRecording(sessionID:identity.sessionID,deviceSerialNumber:"SYNTHETIC",createdAt:date,duration:48,localFileName:"synthetic.wav",status:.ready,statusDetail:nil,transcript:nil,transcriptionID:nil,cloudCheckpoint:nil,updatedAt:date,generatedTitle:"Product planning")
+        verificationItem=NativeLibraryItem(identity:identity,local:recording,remote:nil,audioURL:audio)
+        select(identity)
+        let digest=SHA256.hash(data:try Data(contentsOf:audio)).map {String(format:"%02x",$0)}.joined()
+        let request=AIProcessingRequest(version:1,id:UUID(),recordingID:"synthetic",audioFilename:"synthetic.wav",audioSHA256:digest,provider:.local,format:.detailed,createdAt:date,summaryOnly:false,transcriptRequestID:nil,summaryModel:.qwen4b)
+        let segments=[
+            AISpeechSegment(id:0,start:1,end:16,speaker:"Speaker 1",text:"Let's keep the first release focused on recording imports, saved speakers and PDF reports.",speakerID:"speaker_001"),
+            AISpeechSegment(id:1,start:17,end:30,speaker:"Speaker 2",text:"I'll send the test report by Friday. We should review the results before we set a launch date.",speakerID:"speaker_002"),
+            AISpeechSegment(id:2,start:31,end:46,speaker:"Speaker 1",text:"Agreed. Test the import flow first, then review the report and decide when to launch.",speakerID:"speaker_001")]
+        func item(_ title:String,_ body:String,_ ids:[Int])->AIVisualItem {AIVisualItem(title:title,tokens:[.init(text:body,speakerID:nil)],sourceSegments:ids)}
+        let report=AIVisualSummary(schemaVersion:2,title:"Product planning",theme:"editorial",blocks:[
+            .init(id:"overview",type:.hero,title:"A focused first release",items:[item("","Recording imports, saved speakers and PDF reports.",[0])],layout:.wide,role:.fact),
+            .init(id:"scope",type:.decisions,title:"Agreed scope",items:[item("Keep the first release focused","Prioritize recording imports, saved speakers and PDF reports for the first release.",[0,2])],layout:.half,role:.fact),
+            .init(id:"report",type:.tasks,title:"Next action",items:[AIVisualItem(title:"Send the test report",tokens:[.init(text:nil,speakerID:"speaker_002"),.init(text:" will send the test report by Friday.",speakerID:nil)],sourceSegments:[1],deadline:"Friday")],layout:.half,role:.fact),
+            .init(id:"next",type:.processFlow,title:"Before launch",items:[item("Test imports","Test the import flow.",[2]),item("Review the report","Review the results together.",[1,2]),item("Choose a launch date","Make the decision after the review.",[1,2])],layout:.wide,role:.fact,edges:[.init(from:0,to:1,label:"Then",sourceSegments:[2]),.init(from:1,to:2,label:"After review",sourceSegments:[1,2])])
+        ],subtitle:"Scope, responsibilities and next steps",category:"Fictional meeting",layout:.editorial)
+        try report.validate(segments:segments)
+        let summary=AIStructuredSummary(summary:"The team agreed to focus the first release on recording imports, saved speakers and PDF reports. The test report is due Friday; a launch date will be chosen after review.",topics:["First-release scope","Testing and launch planning"],decisions:["Keep the first release focused."],tasks:[],uncertainties:["The launch date has not been set."],recordingTitle:"Product planning")
+        analyses=[AIProcessingResult(version:1,request:request,stage:.completed,transcript:segments.map(\.text).joined(separator:" "),segments:segments,summary:summary,error:nil,updatedAt:date,duration:48,visualSummary:report)]
+        analysisID=request.id;conversation = .initial(segments)
+        try LocalAIFileStore(root:root).save(analyses[0])
+        var voices=AIVoiceLibrary();voices.recognitionEnabled=true
+        _=try voices.remember(name:"Maya Chen",sample:.init(recordingKey:"previous-demo-meeting",speakerID:"speaker_001",embedding:[1,0],confirmedAt:date,recordingID:"previous-demo-meeting"))
+        _=try voices.remember(name:"Alex Morgan",sample:.init(recordingKey:"previous-demo-meeting",speakerID:"speaker_002",embedding:[0,1],confirmedAt:date,recordingID:"previous-demo-meeting"))
+        guard let key=conversationKey else {throw AIProcessingError.invalidRequest}
+        try AIConversationStore(root:root).saveTogether(conversation,key:key,voices:voices)
+        loadConversation();speakerCentroids=["0":[1,0],"1":[0,1]]
+        precondition(assignSpeaker("speaker_001",name:"Maya Chen",profile:voices.profiles[0].id,remember:false))
+        precondition(assignSpeaker("speaker_002",name:"Alex Morgan",profile:voices.profiles[1].id,remember:false))
+        chat=AIChatHistory(messages:[.init(role:"user",text:"What needs to happen before launch?"),.init(role:"assistant",text:"Test recording imports, review the test report, then choose a launch date. Alex will send the report by Friday.")])
+        try AIChatStore(root:root).save(chat,key:key)
+        savedDevice=try SavedPlaudDevice(serialNumber:"882SYNTHETIC",model:.notePinS,protocolVersion:20)
+        offlineAuthorizationReady=true
+        status="Demo library · fictional meeting data"
+        if let index=CommandLine.arguments.firstIndex(of:"--verify-pdf"),CommandLine.arguments.indices.contains(index+1) {
+            let target=URL(fileURLWithPath:CommandLine.arguments[index+1])
+            guard !FileManager.default.fileExists(atPath:target.path) else {throw AIProcessingError.invalidRequest}
+            try NativeVisualPDF.write(report:report,title:report.title,date:date,duration:48,speakers:resolvedConversation,segments:segments,textSummary:summary.summary,transcript:analysis?.readableTranscript ?? "",to:target)
+        }
+    }
     func prepareSpeakerMergeVerification(root:URL) throws {
         try prepareConversationVerification(root:root)
         loadConversation()
@@ -453,6 +508,9 @@ actor NativeConversationRefresh {
     /// Explicit developer mode: isolated synthetic data, no runtime/network or
     /// real library. Exercises the same views, resolver and AVAudioPlayer.
     func prepareConversationVerification(root:URL) throws {
+        #if VECTA_DEVELOPMENT
+        if CommandLine.arguments.contains("--verify-public-demo") {try preparePublicDemo(root:root);return}
+        #endif
         let audio=root.appendingPathComponent("synthetic.wav")
         let format=AVAudioFormat(standardFormatWithSampleRate:16000,channels:1)!
         let buffer=AVAudioPCMBuffer(pcmFormat:format,frameCapacity:192000)!

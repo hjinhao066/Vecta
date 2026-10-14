@@ -11,6 +11,8 @@ import json
 import os
 import re
 import stat
+import struct
+import zlib
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,6 +49,42 @@ PRIVATE_SUFFIXES = {
 }
 TEXT_SUFFIXES = {'.swift', '.py', '.sh', '.json', '.yml', '.md', '.txt',
                  '.hpp', '.h', '.c', '.cpp', '.hex', '.resolved', '.strings'}
+
+
+PUBLIC_SCREENSHOTS = {
+    'docs/assets/screenshots/' + name + '.png'
+    for name in ('transcript', 'speakers', 'visual-summary', 'pdf-export', 'automation', 'library')
+}
+PUBLIC_PDF = 'docs/assets/sample-report.pdf'
+
+
+def valid_screenshot(data):
+    """Only a complete, bounded PNG without opaque metadata chunks."""
+    if not data.startswith(b'\x89PNG\r\n\x1a\n') or len(data) > 16*1024*1024:
+        return False
+    offset, chunks = 8, []
+    while offset + 12 <= len(data):
+        size = int.from_bytes(data[offset:offset+4], 'big')
+        kind = data[offset+4:offset+8]
+        end = offset + 12 + size
+        if end > len(data) or kind not in {b'IHDR', b'IDAT', b'IEND'}:
+            return False
+        payload = data[offset+8:offset+8+size]
+        crc = int.from_bytes(data[offset+8+size:end], 'big')
+        if zlib.crc32(kind + payload) & 0xffffffff != crc:
+            return False
+        if kind == b'IHDR':
+            if chunks or size != 13:
+                return False
+            width, height, depth, color, compression, filtering, interlace = struct.unpack('>IIBBBBB', payload)
+            if not (1 <= width <= 4096 and 1 <= height <= 4096 and depth == 8
+                    and color in {2, 6} and compression == filtering == interlace == 0):
+                return False
+        chunks.append(kind)
+        offset = end
+        if kind == b'IEND':
+            return size == 0 and offset == len(data) and chunks[0] == b'IHDR' and b'IDAT' in chunks
+    return False
 
 
 def canonical_relative(name):
@@ -97,6 +135,16 @@ def source_byte_errors(name, data):
             errors.append(name + ': non-text content in approved text file')
         if b'\x00' in data:
             errors.append(name + ': opaque content in approved text file')
+        if PERSONAL_PATH.search(data):
+            errors.append(name + ': personal absolute path')
+    elif name in PUBLIC_SCREENSHOTS:
+        if not valid_screenshot(data):
+            errors.append(name + ': unexpected screenshot resource format')
+    elif name == PUBLIC_PDF:
+        if (not data.startswith(b'%PDF-1.') or not data.rstrip().endswith(b'%%EOF')
+                or len(data) > 16*1024*1024
+                or any(marker in data for marker in (b'/JavaScript', b'/JS ', b'/Launch', b'/EmbeddedFile', b'/OpenAction', b'/URI'))):
+            errors.append(name + ': unexpected sample PDF resource format')
         if PERSONAL_PATH.search(data):
             errors.append(name + ': personal absolute path')
     elif name == 'App/Resources/Vecta.icns':

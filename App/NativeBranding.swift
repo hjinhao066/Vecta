@@ -22,7 +22,10 @@ enum VectaRuntimePreferences {
     }
     static var synchronization: UserDefaults {
         #if VECTA_DEVELOPMENT
-        if CommandLine.arguments.contains(where: { $0.hasPrefix("--verify-") }) { return UserDefaults(suiteName: "Vecta.Verification")! }
+        if CommandLine.arguments.contains(where: { $0.hasPrefix("--verify-") }) {
+            let domain=ProcessInfo.processInfo.environment["VECTA_VERIFICATION_PREFERENCES"]
+            return UserDefaults(suiteName:domain?.hasPrefix("Vecta.Verification.") == true ? domain!:"Vecta.Verification")!
+        }
         #endif
         try? VectaMigration.migratePreferences(defaults: .standard)
         return .standard

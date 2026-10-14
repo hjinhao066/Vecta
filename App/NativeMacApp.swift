@@ -1190,7 +1190,7 @@ private enum NativeOwnerTokenStore {
             try? FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
             model.localAI=try? LocalAIHost(root:root,resources:resources)
             model.destination = .ai; model.status = VL.text("Визуальная проверка: библиотека не открывается.")
-            if !CommandLine.arguments.contains("--verify-speaker-ui") {Task { await model.localAI?.refreshModels() }}
+            if !CommandLine.arguments.contains("--verify-speaker-ui") && !CommandLine.arguments.contains("--verify-public-demo") {Task { await model.localAI?.refreshModels() }}
             if CommandLine.arguments.contains("--verify-reset-ui") {
                 model.savedDevice = try? SavedPlaudDevice(serialNumber: "882SYNTHETIC", model: .notePinS, protocolVersion: 20)
                 model.offlineAuthorizationReady = true; model.destination = .device

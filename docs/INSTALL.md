@@ -43,7 +43,7 @@ separate owner acceptance check; do not treat local unquarantined launch as it.
   Device enrollment is explicit; do not reset/unbind/delete recordings to repair
   a connection. Follow the app's pairing-mode/onboarding guidance.
 - Valid cached identity reconnect is local BLE; it does not automatically refresh
-  Partner authorization online. See the README's privacy/network table.
+  Partner authorization online. See the README's setup and network boundaries.
 - Allow Bluetooth when needed. Fast transfer may require Location permission to
   identify/restore the Wi-Fi network, and local-network access. No coordinates
   are requested or uploaded. Device Wi-Fi temporarily interrupts Internet access.

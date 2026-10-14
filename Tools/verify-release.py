@@ -101,7 +101,7 @@ def verify(build):
         subprocess.run(['plutil', '-lint', str(resources/(language+'.lproj/InfoPlist.strings'))], check=True)
     executable = app/'Contents/MacOS/Vecta'
     data = executable.read_bytes()
-    for flag in (b'--verify-summary-options', b'--verify-reset-policy', b'--verify-library-ownership', b'--verify-performance-state', b'--verify-fast-transfer-availability', b'--verify-fast-transfer-ui', b'--verify-performance-refresh', b'--verify-saved-detail-preparation', b'--verify-language-restart-policy', b'--verify-welcome', b'--verify-speaker-merge', b'--verify-speaker-ui'):
+    for flag in (b'--verify-summary-options', b'--verify-reset-policy', b'--verify-library-ownership', b'--verify-performance-state', b'--verify-fast-transfer-availability', b'--verify-fast-transfer-ui', b'--verify-performance-refresh', b'--verify-saved-detail-preparation', b'--verify-language-restart-policy', b'--verify-welcome', b'--verify-speaker-merge', b'--verify-speaker-ui', b'--verify-public-demo'):
         require(flag not in data, 'Development harness remains')
     worker_paths = [workers/name for name in ('VectaSpeech', 'VectaMLX')]
     for binary in [executable, *worker_paths, *(workers/'SwiftRuntime').glob('*.dylib')]:

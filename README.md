@@ -1,146 +1,172 @@
 # Vecta
 
-**Native macOS recording library with local transcription and AI.**
+**PLAUD recordings, processed locally on your Mac.**
 
-Vecta imports audio and downloads recordings from a selected PLAUD recorder using
-its independent BLE / Wi-Fi Fast Transfer implementation. Playback, transcription,
-speaker tools, text/visual summaries, recording assistant and questions across the
-library run on your Mac. Audio, transcripts, summaries, voice embeddings and user
-documents are not sent to cloud inference. There is no hosted-processing fallback.
+Sync recordings directly over Bluetooth or Wi-Fi, transcribe and summarize them
+on-device, save speaker profiles, and export PDF reports. Vecta is a native macOS
+app for Apple Silicon Macs with **8 GB of unified memory or more** using the 4B
+model. The interface supports **English and Russian**.
 
-**0.1.0 developer preview.** This is not an official PLAUD product, not a universal
-consumer authorization service, and not a notarized app. Read the limits below and
-[release verification / remaining gates](RELEASE_READINESS_REPORT.md).
+[Download the developer preview](https://github.com/olgvroe/Vecta/releases/latest)
+· [Build from source](docs/BUILD.md)
+· [Installation](docs/INSTALL.md)
 
-## Features
+![English transcript with named speakers](docs/assets/screenshots/transcript.png)
 
-- Native SwiftUI/AppKit recording library, search, playback and audio import.
-- Independent Bluetooth transport, reconnection and local Wi-Fi Fast Transfer.
-- WhisperKit large-v3 Turbo speech recognition and SpeakerKit diarization.
-- Persistent speaker names, explicit voice confirmation and guarded speaker merge.
-- MLX Qwen3.5 4B / 9B summaries, visual cards, recording assistant and library answers.
-- Processing history, explicit model selection/download, cancellation and recovery.
-- Text/PDF/audio exports, source-preserving migration, light/dark themes, English/Russian UI.
+*Screenshots show the real native interface with fictional meeting data. The demo
+transcript and summaries are prepared examples, not model-quality benchmarks.*
 
-## System requirements
+## A local workflow
 
-Full app: **Apple Silicon, macOS15+, at least 8 GB unified memory** (4B).
-9B requires at least16 GB; available memory and other running apps still matter.
-Intel, iPhone/iPad/Catalyst are unsupported. Model weights require separate disk
-space and explicit installation. Audio processing supports recordings up to6 hours;
-that policy and chunk/checkpoint tests are not evidence of a new6-hour end-to-end
-inference acceptance test. Minimum-OS/clean-user acceptance is reported separately.
+Vecta implements its own **BLE and local Wi-Fi Fast Transfer**, without the PLAUD
+SDK, a relay website, or an intermediary service for recording transfer. Audio is
+received directly from the selected recorder and kept in your local library.
 
-## Device coverage
+Speech recognition, speaker separation, text and visual summaries, and the
+assistant run on your Mac. **No recording content is sent to cloud inference, and
+there is no cloud fallback.** You do not need Docker, a browser dashboard or a
+separate model server.
 
-| Family | Implementation | Physical evidence |
-|---|---|---|
-| PLAUD NotePin S | BLE and Fast Transfer adapters | Existing owner-accepted recorder/Mac setup: authenticated transfer, nonempty MP3 import and previous-network restoration |
-| PLAUD Note / NotePin / Note Pro | Conservative native descriptors/adapters | No blanket hardware/firmware validation claimed |
-| Local audio files | Import, playback/conversion/export | Automated fixtures; codec execution is separate from a hardware test |
+Internet access is needed for initial device authorization and model downloads.
+Once your recorder is configured and the models are installed, normal recording
+transfer and processing work without Internet access. Installing another model
+or deliberately refreshing authorization may require it again.
 
-The NotePin S result is retained acceptance of the documented setup, not a fresh
-physical test of every release or a promise of all firmware/cancellation cases.
-Hardware-dependent checks are not replaced with simulated CI success.
+> **Device setup:** first-time connection to a modern PLAUD recorder requires your
+> own authorized PLAUD Partner credentials. Vecta does not include shared keys or
+> provide Partner access. You can import local audio without device credentials.
+> See [setup and network boundaries](#setup-and-network-boundaries).
 
-## Build from source — one command
+## Remember who is speaking
 
-Install full Xcode26.0+ (Swift6.2+/Metal tools), Python3.9+, Git, make and curl on
-Apple Silicon macOS15+. Select full Xcode as the active toolchain. Then:
+Save named voice profiles and use them in later recordings. Confirm a suggested
+speaker, correct a name, or merge speaker groups while preserving saved results.
+Voice samples and profiles remain local.
+
+![Saved speaker profiles in the transcript workflow](docs/assets/screenshots/speakers.png)
+
+## Visual summaries
+
+Read the main points as a visual report: decisions, responsibilities, next steps,
+quotes and relationships. Text summaries and the visual report stay with the
+recording, alongside the original transcript and processing history.
+
+![Visual summary of the fictional product-planning meeting](docs/assets/screenshots/visual-summary.png)
+
+## PDF reports
+
+Export a transcript, text summary, visual summary or complete report as **PDF or
+TXT**. PDF export preserves the visual layout and uses saved results; exporting
+does not start another AI job.
+
+![Native PDF export options](docs/assets/screenshots/pdf-export.png)
+
+[Open the fictional meeting's sample PDF](docs/assets/sample-report.pdf).
+
+## Automatic sync and processing
+
+Choose a sync interval and enable automatic summaries. While Vecta is open and
+the recorder is available, new recordings can be downloaded, transcribed and
+summarized locally without starting each job by hand. You choose the summary
+formats and can pause or cancel processing.
+
+Automatic sync runs **while the app is open**; Vecta is not a background service
+that continues after you quit it.
+
+![Automatic synchronization and local processing settings](docs/assets/screenshots/automation.png)
+
+## Your recording library
+
+Keep recordings, transcripts and different summary versions together. Search the
+library, listen to the original audio, ask the assistant about a recording, or
+ask questions across saved transcripts.
+
+<details>
+<summary>Library screenshot</summary>
+
+![Local recording library](docs/assets/screenshots/library.png)
+
+
+</details>
+
+## Requirements
+
+- **Apple Silicon Mac, macOS 15 or later.** Intel and iOS/iPadOS are not supported.
+- **8 GB unified memory for Qwen 4B; 16 GB for Qwen 9B.** Available memory and
+  recording length still matter. The minimum is not a guarantee for every workload.
+- Several GB of free disk space for models, recordings and processing files.
+- Models are installed separately through an explicit user action.
+
+Speech uses WhisperKit large-v3 Turbo and SpeakerKit. Summaries and assistant
+features use MLX Qwen3.5 4B/9B. The interface is available in English and Russian;
+new processing jobs retain their selected language policy.
+
+## Install
+
+Download the DMG from [Releases](https://github.com/olgvroe/Vecta/releases), open it,
+and drag Vecta to Applications. Back up an existing library before replacement or
+migration.
+
+**0.1.0 is a developer preview, ad-hoc signed and not notarized.** Gatekeeper may
+block it. Verify the release origin and checksums; if you choose to trust it, use
+Apple's documented **Privacy & Security → Open Anyway** route. Do not disable
+Gatekeeper or bypass a malware warning. See [installation instructions](docs/INSTALL.md).
+
+A clean-user, downloaded-DMG first-launch test is not claimed for this preview.
+[Verification status and limits](RELEASE_READINESS_REPORT.md) distinguish local,
+GitHub CI, physical-device and clean-user checks.
+
+## Device support
+
+- **PLAUD NotePin S:** direct BLE and Fast Transfer accepted on an existing owner
+  recorder/Mac setup, including MP3 import and previous-network restoration.
+- **PLAUD Note, NotePin and Note Pro:** adapters are present; compatibility with
+  every device and firmware is not claimed.
+- **Local audio:** import recordings without a PLAUD account.
+
+Vecta is independent software, not an official PLAUD product.
+
+## Setup and network boundaries
+
+Initial Partner provisioning sends authorization and device metadata to PLAUD
+Partner endpoints. It does **not** upload recording audio, transcripts, summaries,
+voice embeddings or documents. Credentials and cached device identities are kept
+in the login Keychain; valid cached reconnection is local.
+
+Model installation downloads pinned revisions from Hugging Face and verifies
+file sizes and SHA-256. Inference workers are launched with a deny-network policy.
+Fast Transfer uses the recorder's local Wi-Fi network and restores the previous
+network afterward. It does not route audio through an Internet service.
+
+The main app is not advertised as App-Sandbox-entitled. It uses macOS permissions,
+filesystem access and bookmarks; local inference workers have a separate
+network-denying sandbox policy. Read the [security policy](SECURITY.md) before
+reporting a vulnerability. Never attach private recordings or credentials to a
+public issue.
+
+## Build and contribute
+
+Install full Xcode 26.0+ with Swift 6.2+/Metal tools, Python 3.9+, Git, make and
+curl. From the source root, using a new output directory:
 
 ```sh
-python3 -I Tools/release.py build dist/Vecta-0.1.0 --version 0.1.0 --build 64
+python3 -I Tools/release.py build dist/Vecta-0.1.0 --version 0.1.0 --build 65
 ```
 
-Use a NEW output path. This builds and tests the native app, Speech and MLX workers,
-packages a verified DMG, SHA256SUMS, matching source/LAME relink kit and notices.
-It never uses an installed app as an input, installs Vecta, downloads model weights,
-operates a device or publishes anything. **No CMake, llama.cpp or VectaQwen required.**
-Source dependency downloads need Internet. See [build instructions](docs/BUILD.md)
-for prerequisites, clean isolated builds, individual gates and development builds.
+The command builds and checks the native app, workers, codecs, relink kit and DMG.
+It does not install an app, download model weights, operate a recorder or publish
+anything. No CMake, llama.cpp, PLAUD SDK or hosted backend is required.
 
-```sh
-python3 -I Tools/release.py clean .build/clean-release --version 0.1.0 --build 64
-python3 -I Tools/release.py check
-```
+See [BUILD](docs/BUILD.md), [CONTRIBUTING](CONTRIBUTING.md), [CHANGELOG](CHANGELOG.md)
+and [source provenance](docs/PROVENANCE.md). Main branch: `main`; development:
+`develop`. Preserve user data, historical schemas and third-party notices.
 
-## Installation
+## License and origin
 
-Open `Vecta-0.1.0-macOS-arm64.dmg`, drag Vecta to Applications, and eject the image.
-The preview is **ad-hoc signed, not Developer ID signed or notarized**. Gatekeeper
-may block it. Verify the release origin/checksum, then use only Apple's documented
-Privacy & Security > Open Anyway route if you choose to trust it. Never disable
-Gatekeeper or bypass malware warnings. Back up before replacing an existing app
-or migrating a library. See [installation and first use](docs/INSTALL.md).
+Vecta is licensed under [Apache-2.0](LICENSE). It retains adaptations from the
+Apache-2.0 PinPoint baseline, with [NOTICE](NOTICE), provenance and import/rename
+ledgers. It makes no clean-room claim.
 
-## Authorization and network/privacy boundaries
-
-A first modern-device connection requires **your own authorized PLAUD Partner
-credentials**. Vecta does not embed shared credentials or promise Partner account
-access to every recorder owner. Guided enrollment is explicitly user-triggered.
-Pairing/unbinding conditions in onboarding do not authorize destructive repair.
-
-| Operation | Network / metadata | Local data boundary |
-|---|---|---|
-| Initial Partner provisioning | HTTPS to PLAUD Partner endpoints: client ID/secret, requested user identity/IDs for access tokens; RSA key provisioning and device serial/type for `gen-key` / `sn-sign` | No recording audio, transcript, summary, embeddings or document upload |
-| Cached reconnect | Valid Keychain-cached device identity; local BLE signed handshake | Does not automatically refresh Partner credentials or fall back online |
-| BLE import | Local selected-recorder link; recording inventory and file bytes | Writes verified local files; no cloud inference |
-| Fast Transfer | Local recorder Wi-Fi, authenticated encrypted handshake/inventory/transfer | Temporarily changes Wi-Fi; restores prior network or disconnects recorder AP; no Internet inference |
-| Model install | User-triggered HTTPS downloads from pinned Hugging Face model revisions | Size/SHA256 verified; no user recording content sent |
-| Transcription, diarization, all AI modes | Local worker processes launched with deny-network policy | No cloud fallback; outputs and voice profiles remain local |
-| Viewing/history/playback/export | Local filesystem and user-selected export destinations | Export shares data only where the user explicitly chooses |
-
-New credentials/device identities are stored in the login Keychain. Temporary
-access tokens are kept in memory. Compatibility credential reading is isolated
-for inherited installations; it does not start the old backend. Developers may
-use `bash Tools/configure-auth.sh` to enter their own credentials interactively;
-the secret is hidden and must never be pasted into issues or committed.
-
-Location permission for Fast Transfer is used to identify/restore the Wi-Fi
-network; coordinates are not requested or transmitted. App Sandbox entitlement
-is not claimed: the native app uses macOS permissions and filesystem/bookmark
-boundaries, while inference workers have a separate deny-network sandbox policy.
-No application-update service is implemented/advertised by this release pipeline.
-
-## Architecture and models
-
-SwiftUI/AppKit → local recording store / analysis mailbox → serial resource-gated
-workers. Speech uses pinned WhisperKit and SpeakerKit with Core ML resources;
-text/visual/assistant/library modes use **MLX only**, with packaged Metal resources.
-Native C audio codecs (Opus/Ogg/Vorbis/LAME) are statically linked. The independent
-transport is in Packages/VectaTransport; no PLAUD SDK/iOS target or hosted backend.
-
-Production model registry: Whisper, SpeakerKit, Whisper tokenizer, MLX Qwen4B and
-MLX Qwen9B. Model files are separately user-installed, pinned by revision/size/hash,
-and have their own licenses. Qwen2B/GGUF and experimental retired identifiers remain
-Codable solely for history. Unfinished old requests are preserved with an explicit
-unavailable-backend explanation. Choose4B/9B and create a NEW summary version;
-models are not silently substituted and archived weights are not automatically deleted.
-
-## Development / release process
-
-Main branch: `main`; development: `develop`. Read [CONTRIBUTING](CONTRIBUTING.md),
-[security policy](SECURITY.md), [code of conduct](CODE_OF_CONDUCT.md) and
-[CHANGELOG](CHANGELOG.md). CI separates fast model-free regression from full ARM64
-build/package checks. Tags/manual runs prepare a release kit; public publication
-requires the owner's separate explicit action/approval. No large models in PR CI.
-Establish a verified private reporting contact before public launch; when the repository becomes public, enable and test GitHub Private Vulnerability Reporting before announcing the launch. See SECURITY.md.
-
-Known limits: Partner credential availability, hardware/firmware coverage, clean-user
-Gatekeeper/permission acceptance, minimum-OS testing, long-recording inference and
-quality across arbitrary languages remain distinct acceptance gates. Existing
-synthetic/fixture checks are not substitutes for those outcomes.
-
-## Origin and licenses
-
-The existing main-project license is [Apache-2.0](LICENSE); it has not been changed.
-Vecta retains adaptations from the Apache-2.0 PinPoint baseline, with [NOTICE](NOTICE),
-[provenance](docs/PROVENANCE.md) and import/rename ledgers. Historical branding and
-serialization aliases remain where legally or technically required. No clean-room
-claim is made. PLAUD is a third-party platform/device name, not an endorsement.
-
-See [dependencies and license obligations](docs/DEPENDENCIES.md). MLX and Argmax
-frameworks have separate notices; SpeakerKit weight attribution is retained. Every
-DMG must travel with matching source, license artifacts and a working **LAME3.100
-source/object/relink kit**, not just copied COPYING. Technical checks are evidence,
-not a legal guarantee or a full independent authorship/CVE audit.
+Dependencies and model weights have separate licenses. Each distributed DMG
+is accompanied by matching source, component notices and a working **LAME source/object/
+relink kit**. See [dependency obligations](docs/DEPENDENCIES.md).

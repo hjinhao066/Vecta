@@ -22,6 +22,18 @@ import CryptoKit
         }
     }
     static func runTests() async throws {
+        let reservationCases: [(Double,UInt64)] = [(0.001,2_147_491_844),(1,2_147_875_460),(30,2_159_011_460),(30.001,2_159_035_532),(51,2_167_099_148),(51.001,2_167_139_096),(3_600,3_761_977_160),(21_600,18_846_833_852)]
+        for (duration,expected) in reservationCases {
+            try check(AIAudioPolicy.diarizationReservation(duration:duration) == expected,"Diarization reservation parity changed")
+        }
+        for duration in [Double.nan,Double.infinity,-1,0,21_600.001] {
+            try check(AIAudioPolicy.diarizationReservation(duration:duration) == UInt64.max,"Invalid duration admission changed")
+        }
+        let gib: UInt64 = 1_073_741_824
+        try check(!AISummaryModelID.qwen4b.compatible(memory:7*gib),"4B must reject below8GB")
+        try check(AISummaryModelID.qwen4b.compatible(memory:8*gib),"4B must accept8GB")
+        try check(!AISummaryModelID.qwen9b.compatible(memory:15*gib),"9B must reject below16GB")
+        try check(AISummaryModelID.qwen9b.compatible(memory:16*gib),"9B must accept16GB")
         try check(VectaLegacyAuthorization.identity(secret: "fixture-secret-with-at-least-32-bytes") == "pinpoint_fjilu3j6wjqj2udia3viyvpenoincx44", "Archived local identity changed") // gitleaks:allow — fixed synthetic compatibility vector, not a credential
         let fm = FileManager.default
         let root = fm.temporaryDirectory.appendingPathComponent("VectaCoreChecks-" + UUID().uuidString)

@@ -88,7 +88,7 @@ def main():
         build = sub.add_parser(name)
         build.add_argument('output', type=Path)
         build.add_argument('--version', default='0.1.0')
-        build.add_argument('--build', default='64')
+        build.add_argument('--build', default='65')
     args = parser.parse_args()
     if args.action == 'doctor':
         doctor(); return

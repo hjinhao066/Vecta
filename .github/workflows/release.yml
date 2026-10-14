@@ -52,7 +52,7 @@ jobs:
           python3 -I Tools/check-public-tree.py
           go run github.com/zricethezav/gitleaks/v8@v8.24.3 detect --source . --redact --no-banner --exit-code 1
       - name: Clean build / tests / binaries / DMG / checksum / matching source and relink kit
-        run: python3 -I Tools/release.py clean .build/release-dry-run --version "$VERSION" --build 64
+        run: python3 -I Tools/release.py clean .build/release-dry-run --version "$VERSION" --build 65
       - name: Explicitly authorized Actions artifact upload (never public Release)
         if: github.event_name == 'workflow_dispatch' && inputs.upload_artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

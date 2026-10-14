@@ -1,30 +1,22 @@
 # Security policy
 
-## Private reporting — owner activation required
+## Private reporting
 
-**Before public launch, the owner must establish and test a private vulnerability-
-reporting route.** GitHub documents Private Vulnerability Reporting for public
-repositories: repository Settings > Advanced Security > Private vulnerability
-reporting > Enable. Verify externally that Security > Advisories exposes **Report
-a vulnerability** before announcing the launch or distributing release assets.
-Do not claim this form works while the staging repository is private. If it is
-unavailable during the visibility transition, first designate and verify an
-owner-controlled private contact, then enable and verify the GitHub form once the
-repository is public. Report privately through the verified route; do not create
-a public issue containing exploit details.
+Use [GitHub Private Vulnerability Reporting](https://github.com/olgvroe/Vecta/security/advisories/new)
+for this repository. At public launch, the maintainer must enable the form and
+verify that **Security → Advisories → Report a vulnerability** is available before
+releasing binary assets. The form is not assumed to work during private staging.
 
-This local source tree has no public GitHub repository/contact configured, so the
-private form is **not currently verified/available**. This is an explicit public-
-release blocker, not a claim that a private reporting service already exists.
-If the button is missing, do not send sensitive details: contact the owner through
-an already trusted private channel, or open a non-sensitive request asking them
-to enable private reporting. A controlled private email address can be substituted
-only after the owner chooses and verifies it; no placeholder inbox is advertised.
-GitHub instructions: https://docs.github.com/en/code-security/security-advisories/working-with-repository-security-advisories/configuring-private-vulnerability-reporting-for-a-repository
+If it is unavailable, do not post sensitive details publicly. Contact the
+maintainer through an already trusted private channel, or make a non-sensitive
+request to enable private reporting. No separate email inbox is advertised.
+
+GitHub instructions:
+https://docs.github.com/en/code-security/security-advisories/working-with-repository-security-advisories/configuring-private-vulnerability-reporting-for-a-repository
 
 ## What to report
 
-For the upcoming0.1.x developer preview, include version/build, macOS/architecture,
+For the 0.1.x developer preview, include version/build, macOS/architecture,
 reproduction steps using synthetic input, impact and a proposed mitigation if
 known. Never attach recordings, transcripts, summaries, voice embeddings, user
 documents, serial/device-owner identities, Partner secrets/tokens, authorization
@@ -33,7 +25,7 @@ public issues. Redact identifying paths and identifiers in private reports too.
 Do not test on other people's hardware or modify/delete real recordings.
 
 The owner must nominate a responder and monitoring process before public launch.
-A suggested response target is acknowledgement within7 days, followed by triage,
+A suggested response target is acknowledgement within 7 days, followed by triage,
 coordinated disclosure and a security advisory when appropriate. This is a proposed
 process, not an already staffed SLA. Only the current preview is tested; old
 predecessor apps, arbitrary firmware and unsupported platforms are outside this
@@ -48,7 +40,7 @@ No hosted inference fallback exists. User-triggered model downloads and initial
 PLAUD Partner authorization are separate network operations, not inference leaks.
 Initial provisioning exchanges credential/access-token metadata, obtains an RSA
 key pair from the Partner service, and sends device type/serial for a signature.
-Cached valid identity reconnect stays local; see README for the precise table.
+Cached valid identity reconnect stays local; see README for the network boundaries.
 Credentials/identities belong in Keychain; temporary tokens are memory-only.
 
 Imports/migrations must preserve originals and validate paths, file types,

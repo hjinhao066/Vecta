@@ -8,6 +8,8 @@ real codec cache modification, installation, signing or publication is performed
 from pathlib import Path
 import hashlib
 import io
+import struct
+import zlib
 import json
 import os
 import plistlib
@@ -178,6 +180,31 @@ class PublicTreeTests(FixtureCase):
                                (('sk-' + 'z' * 32).encode(), 'possible secret'),
                                (b'/' + b'Users/example-owner/private-file', 'personal absolute')):
             self.assertTrue(any(category in error for error in scan(name, data)))
+
+    def test_exact_public_screenshot_paths_and_format(self):
+        def chunk(kind, payload):
+            return struct.pack('>I', len(payload)) + kind + payload + struct.pack('>I', zlib.crc32(kind + payload) & 0xffffffff)
+        header = chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 2, 0, 0, 0))
+        body = chunk(b'IDAT', zlib.compress(b'\x00\x00\x00\x00'))
+        end = chunk(b'IEND', b'')
+        png = b'\x89PNG\r\n\x1a\n' + header + body + end
+        scan = PUBLIC['source_byte_errors']
+        for name in PUBLIC['PUBLIC_SCREENSHOTS']:
+            self.assertEqual(scan(name, png), [])
+            for invalid in (png[:-1], png+b'extra', png[:40]+b'bad'+png[43:], b'not a PNG'):
+                self.assertTrue(scan(name, invalid))
+            self.assertTrue(scan(name, png[:-12] + chunk(b'tEXt', b'private metadata') + end))
+        self.assertTrue(scan('docs/assets/screenshots/unreviewed.png', png))
+        self.assertTrue(scan('App/screenshot.png', png))
+
+    def test_exact_sample_pdf_path_and_active_content(self):
+        scan = PUBLIC['source_byte_errors']
+        name = PUBLIC['PUBLIC_PDF']
+        pdf = b'%PDF-1.4\nsynthetic fixture\n%%EOF\n'
+        self.assertEqual(scan(name, pdf), [])
+        for invalid in (b'not PDF', pdf[:-7], b'%PDF-1.4\n/JavaScript (unsafe)\n%%EOF'):
+            self.assertTrue(scan(name, invalid))
+        self.assertTrue(scan('docs/assets/unreviewed.pdf', pdf))
 
     def test_opaque_approved_text_rejected(self):
         write(self.root / 'App/Example.swift', b'\x00opaque')

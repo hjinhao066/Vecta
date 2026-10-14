@@ -37,9 +37,12 @@ enum AIAudioPolicy {
         // Pinned W8A16 segmenter metadata: 30s waveform, 21 sliding windows,
         // 10s/window, 1s stride, at most 3 speakers/window. SDK full redundancy
         // advances outer chunks by 21s. Reserve the dense (all voices active) case.
-        let chunks = max(0,ceil((duration-30)/21))+1
-        let embeddings = chunks * 21 * 3
-        return UInt64(ceil(duration * 16_000 * 4 * 6 + embeddings * max(0,embeddings-1) * 2 + 2 * 1_073_741_824))
+        let chunks: Double = max(0,ceil((duration-30)/21))+1
+        let embeddings: Double = chunks * 21 * 3
+        let pcmBytes: Double = duration * 16_000 * 4 * 6
+        let distanceBytes: Double = embeddings * max(0,embeddings-1) * 2
+        let modelBytes: Double = 2 * 1_073_741_824
+        return UInt64(ceil(pcmBytes + distanceBytes + modelBytes))
     }
 }
 

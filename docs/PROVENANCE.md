@@ -10,7 +10,7 @@ Serialized recording DTOs, some storage/export/format helpers and compatibility 
 
 Product authorship and third-party source licenses coexist. Removing a Git remote or starting a new history cannot remove the license obligations of retained code.
 
-## Legacy inference retirement (14 October2026)
+## Legacy inference retirement (14 October 2026)
 
 The CMake/QwenWorker and exclusively C++ schema/prompt headers were removed from
 future production builds after MLX migration. Import ledger entries keep original
