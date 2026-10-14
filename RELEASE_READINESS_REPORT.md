@@ -4,8 +4,9 @@ Date: 15 October 2026. Version 0.1.0, build64, Apple Silicon/macOS15+,
 ad-hoc developer preview. The final clean-source build and local DMG checks pass.
 The owner subsequently explicitly authorized protected replacement of their
 installed application; that replacement and independent verification are complete.
-No source upload, publication, model download/deletion, owner audio inference or
-device operation was performed. Public launch remains a separate owner decision.
+No public source upload, public release, model download/deletion, owner audio
+inference or device operation was performed. The owner subsequently authorized
+private source placement, now completed; public launch remains a separate decision.
 
 ## Private repository preparation — owner authorized, 15 October 2026
 
@@ -15,15 +16,25 @@ remain separate actions, not authorized by the private-source request. Preparati
 uses a fresh allowlisted export and a separate Git repository; the internal
 working tree, journals, credentials, recordings, models and installation evidence
 are not uploaded. GitHub CLI was prepared locally from its official SHA256-verified
-archive, without a global installation. Remote creation/upload is pending the
-owner's GitHub authentication; no remote repository or upload is yet claimed.
+archive, without a global installation. Browser authentication completed through
+GitHub with credentials stored in the OS keyring, not the source repository.
+
+Private repository: https://github.com/olgvroe/Vecta. GitHub API confirms PRIVATE
+visibility and default branch main. Reviewed source was uploaded on main/develop;
+all226 remote paths, modes and Git blob identities match the reviewed local commit.
+The initial one-commit Git history and source export pass redacted secret scans.
+Actions are disabled during initial staging to avoid unsolicited hosted build usage;
+no cloud run, tag, binary asset, public Release or public visibility change occurred.
+The next step is owner-approved CI execution and release/environment/protection
+configuration before reconsidering public launch.
 
 ## Final publication audit — 15 October 2026
 
 **Decision: technically prepared for private source-repository staging; not yet
 cleared for public GitHub launch under the project's stated release policy.**
 The DMG is locally verified, but public binary-release acceptance remains separate.
-No repository was created, source uploaded, remote configured or release published.
+No public repository or release was published. The later owner-authorized private
+source placement is recorded above and does not clear these public-launch gates.
 
 Fresh audit re-ran the current-source release check: public226, packaging60,
 core58/UI91/speaker100/runtime52/localization3049/prompt69/legacy117 and host/IPC
@@ -40,8 +51,8 @@ Final corrected public export has226 files and passes redacted gitleaks8.24.3;
 workflow actionlint1.7.7 passes. Audit executables match their retained pinned
 archives. All five release-asset SHA256 checks pass. The source, license and LAME
 archives reject unsafe paths, links/special members and literal owner-home paths.
-Actual executable/tool source still matches final64's source manifest. No Git
-repository/history exists here to audit; review the future staged index/history
+Actual executable/tool source still matches final64's source manifest. The original local audit preceded Git initialization; the later isolated private
+staging index/history was reviewed and scanned. Recheck any subsequent history
 before changing repository visibility.
 
 Two documentation defects were fixed: public AGENTS.md no longer requires omitted
@@ -153,7 +164,7 @@ reconnect is local. No cloud inference fallback was added.
 | Physical device rerun | NOT TESTED |No device commands here; earlier owner-accepted NotePinS setup retained, not universal coverage |
 | Clean-user downloaded Gatekeeper | BLOCKED |Requires separate clean profile/Mac and owner acceptance |
 | GitHub private vulnerability reporting | BLOCKED |Repository/settings/contact activation remains an owner action |
-| Actual GitHub Actions/protections | BLOCKED |No remote/upload performed; local tests are not cloud execution |
+| Actual GitHub Actions/protections | PENDING |Private source repository created and verified; Actions held disabled; no hosted run/protections verified |
 
 The final r5 pipeline completed successfully. Earlier r3/r4 failures were packaging
 verification/tooling defects, retained as diagnostics, and are not final candidates.
@@ -171,8 +182,10 @@ was verified. Technical inventory is not legal certification or a full CVE audit
 Initial Partner service receives authorization/device metadata and returns an RSA
 pair/signature; no audio/text/embedding/documents are sent for inference. The
 source allowlist and redacted secret scan are defense in depth, not a formal
-no-secret guarantee. No Git repository/index/history was initialized or published
-by this preparation, so no claim of Git-history verification is made.
+no-secret guarantee. Only the separate226-file source export was initialized and uploaded to the
+explicitly authorized private repository. Its initial index/history was checked
+and secret-scanned; the internal working directory and private evidence were not
+initialized or uploaded.
 
 ## Release statuses
 

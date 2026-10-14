@@ -9,7 +9,7 @@ fixtures, logs, installed-app backups, credentials, recordings or model weights.
 Release assets are the DMG, SHA256SUMS, source archive, LAME source/object/relink kit,
 component-license archive and release notes. Never omit the matching LAME kit.
 
-## Repository owner actions (not performed by an agent)
+## Repository owner gates (require explicit authorization)
 
 1. Inspect the exact public export and Git index/history. Main license is already
    Apache-2.0; preserve LICENSE/NOTICE and provenance. Do not publish the working
