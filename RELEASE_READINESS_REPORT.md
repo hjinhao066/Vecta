@@ -35,14 +35,14 @@ build79 executable SHA256 is
 `170dba2f0a8015f08770b1da559e46363d13228745c8a476a3cba803a1e46809`.
 Build78 is the sole local rollback. The app was not launched during replacement.
 
-**Build79 is not public yet.** The public repository's `main` and
-`v0.1.0-build78` tag still identify the older build78 source, and no build78/79
-release assets have been uploaded. Before public distribution, export/commit the
-exact build79 public source, complete the matching hosted checks, create a build79
-tag and upload the matching DMG, source, licenses, LAME relink kit, SHA256SUMS,
-release notes and artifact-verification report. Clean-user Gatekeeper, Developer
-ID/notarization, physical-device, real-inference and minimum-OS acceptance remain
-unresolved.
+**Build79 is not public yet.** Public `main` now identifies its exact reviewed
+source commit `5f9bd14d2242b7782df1af39207a32e0dfc234c3`; hosted macOS run
+`38902858240` is in progress. Tag `v0.1.0-build78` remains the earlier source and
+no build78/79 release assets have been uploaded. Before public distribution, the
+matching hosted checks must pass, then create a build79 tag and upload the matching
+DMG, source, licenses, LAME relink kit, SHA256SUMS, release notes and
+artifact-verification report. Clean-user Gatekeeper, Developer ID/notarization,
+physical-device, real-inference and minimum-OS acceptance remain unresolved.
 
 
 ## Build77 compiler-compatibility correction — 16 October 2026
