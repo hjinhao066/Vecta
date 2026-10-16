@@ -1,5 +1,12 @@
 # Vecta 0.1.0 developer-preview verification
 
+## Build78 portable model-free validation
+
+The shipped application code is unchanged from77. The library-search fixture now respects the existing8/16GiB host admission rules instead of unconditionally expecting4B/9B acquisition on a7GB standard hosted runner. It logs actual physical memory, asserts rejection for incompatible models, and always verifies both synthetic model directories and corrupt/missing-file rejection. Successful host/stale-status paths remain tested on compatible hardware, with explicit coverage limits on low-memory machines. No production memory policy, permission check or CI gate is removed.
+
+All20 revised native executable regressions passed locally on synthetic data. Package, protected installation and public availability are separate evidence: consult the matching release notes/artifact-verification.json and [required hosted checks](https://github.com/olgvroe/Vecta/pull/1/checks). Source or local fixture success alone is not a public-release or installation claim. Build77 hosted packaging compiled both apps but failed on the old fixture; builds76/77 remained unpublished. The prior build77 installation evidence below is historical, not a claim that changed test sources match its frozen build snapshot.
+
+
 ## Build77 compiler-compatibility correction — 16 October 2026
 
 Build77 is installed after a fresh verified backup and atomic replacement; executable SHA256 `83eb930a7472b6645c51cbc91c102b754e2a419ee56f7342e96560b6f6941961`. Candidate/installed/rollback inventories, strict/deep signatures, all protected data/model/settings and backup bytes/modes match. The app was not launched by installation. Build76 is retained for rollback.

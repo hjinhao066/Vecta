@@ -1021,28 +1021,59 @@ extension VectaAppChecks {
         let exports=root.appendingPathComponent("Exports")
         try FileManager.default.createDirectory(at:exports,withIntermediateDirectories:false)
         let host=try LocalAIHost(root:exports,resources:resources,modelsRoot:models)
+        let memory = ProcessInfo.processInfo.physicalMemory
+        print("Library-search fixture hardware: \(memory) bytes RAM")
         for model in AISummaryModelID.allCases {
             try check(host.statuses[model.rawValue]?.state == .verifying)
-            let directory=try await host.acquireAnswerModel(model)
-            try check(directory.lastPathComponent==model.rawValue+"-"+revision && host.statuses[model.rawValue]?.state == .installed)
+            if model.compatible(memory:memory) {
+                let directory=try await host.acquireAnswerModel(model)
+                try check(directory.lastPathComponent==model.rawValue+"-"+revision && host.statuses[model.rawValue]?.state == .installed)
+                await host.manager.release(model.rawValue)
+            } else {
+                do {
+                    _=try await host.acquireAnswerModel(model)
+                    try check(false,"Host must reject a model above the machine's memory allowance")
+                } catch AIProcessingError.invalidRequest {}
+                try check(host.statuses[model.rawValue]?.state == .verifying,"Memory rejection must not pretend model files are missing or damaged")
+            }
+            let directory=try await host.manager.acquire(model.rawValue)
+            try check(directory.lastPathComponent==model.rawValue+"-"+revision,"Synthetic file integrity must be checked for both models regardless of hardware admission")
             await host.manager.release(model.rawValue)
         }
         try check(host.statuses["whisper"]?.state == .verifying,"Answer readiness requires no speech models")
-        host.selectSummaryModel(.qwen9b)
-        host.statuses["qwen9b"]?.state = .notInstalled
-        let chosen=try await host.acquireAnswerModel(.qwen9b)
-        try check(chosen.lastPathComponent.hasPrefix("qwen9b-") && host.summaryModel == .qwen9b,"Stale missing snapshot must use selected 9B, not silently switch to 4B")
-        await host.manager.release("qwen9b")
-        try Data(repeating:0,count:bytes.count).write(to:chosen.appendingPathComponent("fixture.bin"),options:.atomic)
-        do {_=try await host.acquireAnswerModel(.qwen9b);preconditionFailure("Corrupt installed model accepted")} catch {
-            try check(host.statuses["qwen9b"]?.state == .damaged && host.summaryModel == .qwen9b)
+        if let model=AISummaryModelID.allCases.last(where:{$0.compatible(memory:memory)}) {
+            let id=model.rawValue
+            host.selectSummaryModel(model)
+            host.statuses[id]?.state = .notInstalled
+            let chosen=try await host.acquireAnswerModel(model)
+            try check(chosen.lastPathComponent.hasPrefix(id+"-") && host.summaryModel == model,"Stale missing snapshot must use selected compatible model, not silently switch")
+            await host.manager.release(id)
+            try Data(repeating:0,count:bytes.count).write(to:chosen.appendingPathComponent("fixture.bin"),options:.atomic)
+            do {_=try await host.acquireAnswerModel(model);preconditionFailure("Corrupt installed model accepted")} catch {
+                try check(host.statuses[id]?.state == .damaged && host.summaryModel == model)
+            }
+            try FileManager.default.removeItem(at:chosen)
+            host.statuses[id]?.state = .installed
+            do {_=try await host.acquireAnswerModel(model);preconditionFailure("Missing model accepted")} catch {
+                try check(host.statuses[id]?.state == .notInstalled && host.summaryModel == model)
+            }
+        } else {
+            print("NOT TESTED on this machine: successful host answer-model admission and stale-status projection; requires at least 8 GiB RAM. Memory rejection and both synthetic model integrity paths are exercised.")
         }
-        try FileManager.default.removeItem(at:chosen)
-        host.statuses["qwen9b"]?.state = .installed
-        do {_=try await host.acquireAnswerModel(.qwen9b);preconditionFailure("Missing model accepted")} catch {
-            try check(host.statuses["qwen9b"]?.state == .notInstalled && host.summaryModel == .qwen9b)
+        // File integrity is independent of memory admission and must never be skipped.
+        let integrityModel=AISummaryModelID.qwen9b.rawValue
+        let integrityDirectory=models.appendingPathComponent(integrityModel+"-"+revision)
+        try FileManager.default.createDirectory(at:integrityDirectory,withIntermediateDirectories:true)
+        try bytes.write(to:integrityDirectory.appendingPathComponent("fixture.bin"),options:.atomic)
+        _=try await host.manager.acquire(integrityModel)
+        await host.manager.release(integrityModel)
+        try Data(repeating:0,count:bytes.count).write(to:integrityDirectory.appendingPathComponent("fixture.bin"),options:.atomic)
+        do {_=try await host.manager.acquire(integrityModel);try check(false,"Corrupt synthetic model accepted")} catch LocalModelError.checksum {}
+        try FileManager.default.removeItem(at:integrityDirectory)
+        do {_=try await host.manager.acquire(integrityModel);try check(false,"Missing synthetic model accepted")} catch let error as NSError {
+            try check(error.domain==NSCocoaErrorDomain,"Missing synthetic model must fail with a filesystem error")
         }
-        print("PASS global library search: Russian name/topic inflections, English, ё/е, strict visibility/budget, 90 hidden decoys, source IDs/timestamps, deletion and no-evidence; shared selected 4B/9B verified acquire ignores stale UI status, needs no ASR and rejects corrupt/missing files. Synthetic only; no weights, downloads, inference or owner library.")
+        print("PASS global library search: Russian name/topic inflections, English, ё/е, strict visibility/budget, 90 hidden decoys, source IDs/timestamps, deletion and no-evidence; hardware-admitted host acquire or explicit low-memory rejection, both synthetic 4B/9B integrity checks, compatible selected-model stale UI handling, no ASR and corrupt/missing rejection. Synthetic only; no weights, downloads, inference or owner library.")
     }
 }
 

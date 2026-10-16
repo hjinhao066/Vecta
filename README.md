@@ -7,7 +7,7 @@ on-device, save speaker profiles, and export PDF reports. Vecta is a native macO
 app for Apple Silicon Macs with **8 GB of unified memory or more** using the 4B
 model. The interface supports **English and Russian**.
 
-[Download Vecta 0.1.0 build 77](https://github.com/olgvroe/Vecta/releases/tag/v0.1.0-build77)
+[Download Vecta 0.1.0 build 78](https://github.com/olgvroe/Vecta/releases/tag/v0.1.0-build78)
 · [Build from source](docs/BUILD.md)
 · [Installation](docs/INSTALL.md)
 
@@ -80,7 +80,7 @@ Recording permissions are checked when you choose Start; unattended conference
 recording waits for existing permissions instead of prompting in the background.
 An already authorized microphone is not requested again.
 
-Build 77 uses a stable Apple Development signing identity rather than a different
+Build 78 uses a stable Apple Development signing identity rather than a different
 ad-hoc code identity on each rebuild. Switching identities may require a one-time
 new macOS grant. This does not override revoked permissions, OS reminders or
 Gatekeeper, and is not Developer ID signing or notarization.
@@ -147,7 +147,7 @@ Download the DMG from [Releases](https://github.com/olgvroe/Vecta/releases), ope
 and drag Vecta to Applications. Back up an existing library before replacement or
 migration.
 
-**Build 77 is a developer preview signed with Apple Development, not Developer ID,
+**Build 78 is a developer preview signed with Apple Development, not Developer ID,
 and is not notarized.** Gatekeeper may
 block it. Verify the release origin and checksums; if you choose to trust it, use
 Apple's documented **Privacy & Security → Open Anyway** route. Do not disable
