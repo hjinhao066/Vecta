@@ -224,8 +224,9 @@ final class NativeSystemAudioSink: NSObject, SCStreamOutput, SCStreamDelegate, A
                 try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
                 tracks[source] = Track(writer: writer, input: input, start: pts, url: url)
             }
-            guard let track = tracks[source], track.input.isReadyForMoreMediaData,
-                  track.input.append(buffer) else { throw NativeMacRecordingError.encoding }
+            guard let track = tracks[source] else { throw NativeMacRecordingError.encoding }
+            guard track.input.isReadyForMoreMediaData else { return }
+            guard track.input.append(buffer) else { throw NativeMacRecordingError.encoding }
         } catch { failure = error; onFailure?() }
     }
     func stream(_ stream: SCStream, didStopWithError error: Error) { onFailure?() }

@@ -7,6 +7,44 @@ The shipped application code is unchanged from77. The library-search fixture now
 All20 revised native executable regressions passed locally on synthetic data. Package, protected installation and public availability are separate evidence: consult the matching release notes/artifact-verification.json and [required hosted checks](https://github.com/olgvroe/Vecta/pull/1/checks). Source or local fixture success alone is not a public-release or installation claim. Build77 hosted packaging compiled both apps but failed on the old fixture; builds76/77 remained unpublished. The prior build77 installation evidence below is historical, not a claim that changed test sources match its frozen build snapshot.
 
 
+## Build79 recording-safety correction — 16 October 2026
+
+Build79 supersedes build78 for future distribution. It corrects a reviewed recording
+failure mode: when a real-time `AVAssetWriterInput` briefly reports that it is not
+ready for more media data, Vecta drops that individual sample rather than treating
+the temporary backpressure as a fatal encoding error and stopping the recording.
+A failed append while ready remains fatal. It also restores the UI control to create
+or retry an optional visual summary from an existing saved text summary; the retry
+preserves the saved transcript/text and runs only that optional stage.
+
+Fresh full nondevelopment build79 passed the public-source/security gates, 92 core,
+121 UI-state,100 speaker,71 native-runtime,73 prompt-language,123 legacy,18 download
+and Mac-recording policy checks; 20 actual compiled native executable regressions,
+63 Speech configuration,18 model-free MLX and163 transport tests passed. Package
+verification passed source/link identity, worker missing-input rejection, actual
+LAME relinking, 41 packaged resource and36 relink-kit hashes, Apple Development
+signature, DMG verification/read-only mount/Finder layout/mounted identity and
+temporary Applications-copy integrity. No model weights were downloaded and no
+owner data, recording, device or real inference operation was exercised.
+
+The build is signed by Apple Development team `X5L2952RH6`, not Developer ID or
+notarized. Its DMG SHA256 is
+`f1fc9b1dea8114b356a89514812b7e0ac3237f8be34902843b68286f2bfeb70b`.
+Same-user protected installation passed after a fresh nine-root backup; installed
+build79 executable SHA256 is
+`170dba2f0a8015f08770b1da559e46363d13228745c8a476a3cba803a1e46809`.
+Build78 is the sole local rollback. The app was not launched during replacement.
+
+**Build79 is not public yet.** The public repository's `main` and
+`v0.1.0-build78` tag still identify the older build78 source, and no build78/79
+release assets have been uploaded. Before public distribution, export/commit the
+exact build79 public source, complete the matching hosted checks, create a build79
+tag and upload the matching DMG, source, licenses, LAME relink kit, SHA256SUMS,
+release notes and artifact-verification report. Clean-user Gatekeeper, Developer
+ID/notarization, physical-device, real-inference and minimum-OS acceptance remain
+unresolved.
+
+
 ## Build77 compiler-compatibility correction — 16 October 2026
 
 Build77 is installed after a fresh verified backup and atomic replacement; executable SHA256 `83eb930a7472b6645c51cbc91c102b754e2a419ee56f7342e96560b6f6941961`. Candidate/installed/rollback inventories, strict/deep signatures, all protected data/model/settings and backup bytes/modes match. The app was not launched by installation. Build76 is retained for rollback.

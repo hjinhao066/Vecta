@@ -249,6 +249,10 @@ struct NativeRecordingDetail: View {
             if let error=model.analysis?.visualError {
                 Text(error+VL.text(" Текстовое саммари сохранено.")).font(.system(size:12)).foregroundColor(Ink.secondary)
             }
+            if model.analysis?.summary != nil, model.analysis?.visualSummary == nil {
+                Button(model.analysis?.visualError == nil ? VL.text("Создать визуальное саммари") : VL.text("Повторить создание визуального саммари")) { model.retryVisualReport() }
+                    .buttonStyle(QuietButton()).disabled(model.analysisBusy || model.visualRetryBusy)
+            }
             if model.analysis?.summary != nil {
                 if model.conversation.summaryNeedsReview { Text(VL.text("Авторство реплик изменено. Проверьте готовые выводы; содержание саммари автоматически не переписывалось.")).font(.system(size:12)).foregroundColor(Ink.secondary) }
                 if let document=model.analysis?.completeTextSummary {

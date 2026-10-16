@@ -656,6 +656,8 @@
   "» не установлена. Скачайте её в разделе «Локальный ИИ».": "’ is not installed. Download it in Local AI.",
   "Для первой обработки установите модели распознавания.": "Install the speech recognition models before processing your first recording.",
   "Создать саммари": "Create summary",
+  "Создать визуальное саммари": "Create visual summary",
+  "Повторить создание визуального саммари": "Retry visual summary",
   "Новая версия саммари": "New summary version",
   "Формат": "Format",
   "Модель ИИ · ": "AI model · ",

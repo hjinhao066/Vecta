@@ -1,15 +1,19 @@
 # Vecta
 
-**PLAUD recordings, processed locally on your Mac.**
+**Your PLAUD recordings, directly transferred and processed on your Mac.**
 
-Sync recordings directly over Bluetooth or Wi-Fi, transcribe and summarize them
-on-device, save speaker profiles, and export PDF reports. Vecta is a native macOS
-app for Apple Silicon Macs with **8 GB of unified memory or more** using the 4B
-model. The interface supports **English and Russian**.
+Vecta is a native Apple Silicon macOS app that connects to compatible PLAUD
+recorders over Bluetooth and local Wi-Fi Fast Transfer — without the PLAUD SDK, a
+relay website, or a recording-transfer middleman. Keep recordings in a searchable
+local library, transcribe and summarize them on your Mac, remember speakers across
+meetings, and export visual or PDF reports when you need to share the result.
 
-[Download Vecta 0.1.0 build 78](https://github.com/olgvroe/Vecta/releases/tag/v0.1.0-build78)
-· [Build from source](docs/BUILD.md)
+**Recording content is not sent to cloud inference, and Vecta has no cloud-inference
+fallback.** The interface supports English and Russian.
+
+[Download Vecta 0.1.0 build 79](https://github.com/olgvroe/Vecta/releases/tag/v0.1.0-build79)
 · [Installation](docs/INSTALL.md)
+· [Build from source](docs/BUILD.md)
 
 ![English transcript with named speakers](docs/assets/screenshots/transcript.png)
 
@@ -80,7 +84,7 @@ Recording permissions are checked when you choose Start; unattended conference
 recording waits for existing permissions instead of prompting in the background.
 An already authorized microphone is not requested again.
 
-Build 78 uses a stable Apple Development signing identity rather than a different
+Build 79 uses a stable Apple Development signing identity rather than a different
 ad-hoc code identity on each rebuild. Switching identities may require a one-time
 new macOS grant. This does not override revoked permissions, OS reminders or
 Gatekeeper, and is not Developer ID signing or notarization.
@@ -147,7 +151,7 @@ Download the DMG from [Releases](https://github.com/olgvroe/Vecta/releases), ope
 and drag Vecta to Applications. Back up an existing library before replacement or
 migration.
 
-**Build 78 is a developer preview signed with Apple Development, not Developer ID,
+**Build 79 is a developer preview signed with Apple Development, not Developer ID,
 and is not notarized.** Gatekeeper may
 block it. Verify the release origin and checksums; if you choose to trust it, use
 Apple's documented **Privacy & Security → Open Anyway** route. Do not disable
@@ -191,7 +195,7 @@ Install full Xcode 26.4+ with Swift 6.3+/Metal tools, Python 3.9+, Git, make and
 curl. From the source root, using a new output directory:
 
 ```sh
-python3 -I Tools/release.py build dist/Vecta-0.1.0 --version 0.1.0 --build 65
+python3 -I Tools/release.py build dist/Vecta-0.1.0 --version 0.1.0 --build 79
 ```
 
 The command builds and checks the native app, workers, codecs, relink kit and DMG.
