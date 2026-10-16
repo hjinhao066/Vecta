@@ -12,7 +12,7 @@ on:
       build:
         description: Application build number
         required: true
-        default: '76'
+        default: '77'
         type: string
       upload_artifacts:
         description: Explicitly authorize uploading the source/binary kit to GitHub Actions artifacts (not a public Release)
@@ -47,7 +47,7 @@ jobs:
         run: |
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
-            BUILD=76
+            BUILD=77
             if [[ "$VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-build([0-9]+)$ ]]; then
               BUILD="${BASH_REMATCH[2]}"
               VERSION="${BASH_REMATCH[1]}"

@@ -24,6 +24,12 @@ struct NativeRecordingDetail: View {
         let reuseTranscript: Bool
         let model: AISummaryModelID
         let models: [LocalModelDefinition]
+        var confirmationMessage: String {
+            let titles = models.map { VL.string($0.title) }.joined(separator:", ")
+            let totalBytes = models.reduce(Int64(0)) { $0 + $1.size }
+            let downloads = VL.text("Будут скачаны: ") + titles + " · " + VL.bytes(totalBytes)
+            return downloads + ". " + VL.text("После установки начнётся локальная обработка. Исходная запись и предыдущие результаты сохранятся.")
+        }
     }
     @State private var pendingModelInstallation: PendingModelInstallation?
     var body: some View {
@@ -90,7 +96,7 @@ struct NativeRecordingDetail: View {
                 Button(VL.text("Отмена"),role:.cancel) { pendingModelInstallation = nil }
             } message: {
                 if let pending = pendingModelInstallation {
-                    Text(VL.text("Будут скачаны: ") + pending.models.map { VL.string($0.title) }.joined(separator:", ") + " · " + VL.bytes(pending.models.reduce(0) { $0 + $1.size }) + ". " + VL.text("После установки начнётся локальная обработка. Исходная запись и предыдущие результаты сохранятся."))
+                    Text(pending.confirmationMessage)
                 }
             }
             .confirmationDialog(VL.text("Перерасшифровать запись?"),isPresented:$confirmingRetranscription) {

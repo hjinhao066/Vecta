@@ -1,5 +1,12 @@
 # Vecta 0.1.0 developer-preview verification
 
+## Build77 compiler-compatibility correction — preparation, 16 October 2026
+
+Build76 remains installed. Its public release is held: hosted Swift6.3.1 failed twice to type-check the model-download confirmation expression, although local Swift6.4 compiled it. Source/security and model-free macOS checks passed; full hosted packaging did not. No failed CI artifact is accepted.
+
+Build77 decomposes that same confirmation message into intermediate strings and an explicitly typed Int64 total, outside the SwiftUI expression. It changes no capture, authorization, download-consent or user-data behavior. Local and hosted verification, signed packaging, protected installation and publication for77 are pending. Build76 source/binary records below remain historical and are not rewritten to claim a77 binary. The unpublished76 draft is not a public release. Existing public65/tag/assets remain unchanged.
+
+
 Updated: 16 October 2026. Apple Silicon, macOS 15+. Build76 source/package and protected installation evidence is recorded below. Public availability is tracked on the [Releases page](https://github.com/olgvroe/Vecta/releases); build65 is retained unchanged.
 
 ## Corrected permission-flow build76 — 16 October 2026
