@@ -8,7 +8,7 @@ import SwiftUI
     }
     var hasLibraryQuestion:Bool {!librarySearchSession.submittedQuestion.isEmpty}
     func refreshLibraryIndex() {
-        guard let host=localAI,let library else {return}
+        guard purgingRecording == nil, let host=localAI,let library else {return}
         libraryIndexTask?.cancel();let token=UUID();libraryIndexGeneration=token
         let items=library.items.compactMap {item -> AILibraryCatalogItem? in
             guard let local=item.local else {return nil}
@@ -50,7 +50,7 @@ import SwiftUI
     func askLibraryQuestion() {
         objectWillChange.send()
         let question=search.trimmingCharacters(in:.whitespacesAndNewlines)
-        guard !question.isEmpty,question.count<=2000,let library,let host=localAI else {return}
+        guard purgingRecording == nil, !question.isEmpty,question.count<=2000,let library,let host=localAI else {return}
         libraryQuestionTask?.cancel()
         libraryQuestionScroll=0
         let token=librarySearchSession.submit(question),model=host.summaryModel

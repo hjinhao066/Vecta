@@ -1,15 +1,26 @@
 import Foundation
 import CryptoKit
 
+/// UI grouping only. Never serialize this category or infer it from translated labels.
+enum NativeSummaryPresentationCategory: CaseIterable, Identifiable, Hashable {
+    case builtIn, custom
+    var id: Self { self }
+    var title: String { self == .builtIn ? VL.text("Встроенные форматы") : VL.text("Мои форматы") }
+}
+
 /// A single presentation choice, adapted to the existing immutable request schema.
 /// Templates have a neutral format envelope: no second structural prompt is mixed in.
 struct NativeSummaryRecipe: Identifiable {
     let id: String
-    let group: String
+    let category: NativeSummaryPresentationCategory
     let format: VectaSummaryInterpretation
     let template: AISummaryTemplate?
+    var group: String { category.title }
     var title: String { format.displayTitle }
     var detail: String { template?.prompt ?? format.detail }
+    var instructions: String { template?.prompt ?? format.prompt }
+    var displayInstructions: String { template?.prompt ?? format.localizedPrompt(in: VL.language) }
+    var isReadOnly: Bool { template == nil && format.isBuiltin }
 }
 
 enum NativeSummarySelection {
@@ -17,7 +28,7 @@ enum NativeSummarySelection {
     static func recipes(formats: [VectaSummaryInterpretation], templates: [AISummaryTemplate]) -> [NativeSummaryRecipe] {
         let basic = ["detailed", "action_plan", "analytical", "nlp"]
         let formats = formats.map { NativeSummaryRecipe(id: "format:" + $0.id,
-            group: basic.contains($0.id) ? VL.text("Основные") : VL.text("Мои"), format: $0, template: nil) }
+            category: basic.contains($0.id) ? .builtIn : .custom, format: $0, template: nil) }
         let builtinTemplates = Set(AISummaryTemplate.defaults.map(\.id))
         return formats + templates.filter { template in !builtinTemplates.contains(template.id) || AISummaryTemplate.defaults.first(where: { $0.id == template.id }) != template }.map { template in
             let hex = SHA256.hash(data: Data(("Vecta.summary-template:" + template.id).utf8)).map { String(format: "%02x", $0) }.joined()
@@ -26,12 +37,13 @@ enum NativeSummarySelection {
             let envelope = VectaSummaryInterpretation(id: "custom_" + uuid, title: template.displayTitle,
                 prompt: VL.text("Следуй структуре выбранного шаблона. Сохраняй проверяемые источники; не выдумывай факты, решения и договорённости."), revision: 1)
             return NativeSummaryRecipe(id: "template:" + template.id,
-                group: VL.text("Мои"), format: envelope, template: template)
+                category: .custom, format: envelope, template: template)
         }
     }
-    /// New manual summaries expose only the primary formats; saved recipes remain intact.
+    /// Both primary and user recipes can be explicitly chosen for a new summary.
+    /// The existing recipe ID and immutable request snapshot remain unchanged.
     static func creationRecipes(in recipes: [NativeSummaryRecipe]) -> [NativeSummaryRecipe] {
-        recipes.filter { $0.group == VL.text("Основные") }
+        recipes
     }
     static func selected(_ id: String?, legacyFormat: String?, in recipes: [NativeSummaryRecipe]) -> NativeSummaryRecipe? {
         if let id, let value = recipes.first(where: { $0.id == id }) { return value }
@@ -66,6 +78,7 @@ enum NativeSummaryCatalog {
 enum NativeConnectionMessage {
     static func failure(_ reason: String) -> String {
         switch reason {
+        case "native-audio-decoding-failed": return VL.text("Запись скачана, но её аудио не удалось преобразовать. Исходный файл сохранён; записи на диктофоне не изменены.")
         case "local-identity-save-failed": return VL.text("Не удалось сохранить ключи в Связке ключей macOS. Подключение остановлено до регистрации ключа на диктофоне; записи не изменены.")
         case "partner-network-timeout", "timeout-preparing": return VL.text("Сервис авторизации Plaud не ответил вовремя. Повторите синхронизацию.")
         case "partner-network-unavailable": return VL.text("Не удалось связаться с сервисом авторизации Plaud. Проверьте соединение с интернетом.")

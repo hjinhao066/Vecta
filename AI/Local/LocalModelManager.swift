@@ -6,6 +6,7 @@ actor LocalModelManager {
     let root: URL
     let registry: LocalModelRegistry
     private var mutations = Set<String>()
+    private var reservedSpace: [String: Int64] = [:]
     private var inUse = Set<String>()
     private var verified:[String:[String]]=[:]
     private func signatures(_ model:LocalModelDefinition,_ directory:URL)throws->[String] {
@@ -74,7 +75,7 @@ actor LocalModelManager {
         }
         try Task.checkCancellation()
         mutations.insert(id)
-        defer { mutations.remove(id) }
+        defer { mutations.remove(id); reservedSpace[id] = nil }
         let temporary = root.appendingPathComponent(".install-" + id + "-" + model.revision, isDirectory: true)
         if FileManager.default.fileExists(atPath: temporary.path) {
             let values = try temporary.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
@@ -85,7 +86,9 @@ actor LocalModelManager {
         // Partial pinned downloads remain private for explicit resume.
         do {
             progress(LocalModelStatus(modelID: id, state: .preparing, received: 0, total: model.size, error: nil))
-            guard try freeSpace(root) > model.size + 256 * 1_048_576 else { throw LocalModelError.insufficientSpace }
+            let required = reservedSpace.values.reduce(model.size, +) + 256 * 1_048_576
+            guard try freeSpace(root) > required else { throw LocalModelError.insufficientSpace }
+            reservedSpace[id] = model.size
             var received: Int64 = 0
             for file in model.files {
                 try Task.checkCancellation()
@@ -95,7 +98,7 @@ actor LocalModelManager {
                 if (try? LocalModelIntegrity.verify(file, at: destination)) == nil {
                     // Small partial files cannot be resumed; large files use
                     // strict byte ranges and final full-file SHA-256.
-                    if file.size < 1_100_000_000 && FileManager.default.fileExists(atPath: destination.path) {
+                    if file.size < LocalModelDownloader.rangeThreshold && FileManager.default.fileExists(atPath: destination.path) {
                         try FileManager.default.removeItem(at: destination)
                     }
                     if let size = (try? destination.resourceValues(forKeys:[.fileSizeKey]))?.fileSize, Int64(size) == file.size { try FileManager.default.removeItem(at:destination) }
@@ -140,9 +143,18 @@ actor LocalModelManager {
 
     static let speechIDs = ["whisper", "speaker", "tokenizer"]
     func installSpeech(progress: @escaping @Sendable (LocalModelStatus) -> Void) async throws {
-        for id in Self.speechIDs {
-            try Task.checkCancellation()
-            try await install(id,progress:progress)
+        try await withThrowingTaskGroup(of: Result<Void, Error>.self) { group in
+            for id in Self.speechIDs {
+                group.addTask {
+                    do { try await self.install(id, progress: progress); return .success(()) }
+                    catch { return .failure(error) }
+                }
+            }
+            var failure: Error?
+            for try await result in group {
+                if case .failure(let error) = result, failure == nil { failure = error }
+            }
+            if let failure { throw failure }
         }
     }
     func acquire(_ id: String) throws -> URL {

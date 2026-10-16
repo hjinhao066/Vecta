@@ -31,27 +31,97 @@ struct NativeProcessingProgress:View {
 }
 
 
-struct NativeAutomaticFormats:View {
-    @ObservedObject var model:NativeMacModel
-    private var recipes:[NativeSummaryRecipe] {NativeSummarySelection.recipes(formats:model.formats,templates:model.workspace.templates)}
-    var body:some View {
-        if let host=model.localAI {
-            VStack(alignment:.leading,spacing:14) {
-                HStack(alignment:.firstTextBaseline,spacing:16) {
-                    Text(VL.text("Формат саммари")).frame(maxWidth:.infinity,alignment:.leading)
-                    Picker(VL.text("Формат автоматического саммари"),selection:selection(host)) {
-                        ForEach(recipes) {Text($0.title).tag($0.id)}
-                    }.labelsHidden().frame(width:200)
-                }
-                Toggle(VL.text("Создавать визуальное саммари"),isOn:Binding(get:{host.automaticSettings.visual},set:{var value=host.automaticSettings;value.visual=$0;host.setAutomaticSettings(value)})).toggleStyle(.checkbox)
-                Text(VL.text("Текстовое саммари и инфографика создаются в одном выбранном формате.")).font(.system(size:12)).foregroundColor(Ink.secondary).lineSpacing(4)
-            }.disabled(!model.automaticSummary)
+/// Shared library default only; choosing a recipe does not enqueue work or change manual last-used selection.
+struct NativeAutomaticRecipePicker: View {
+    @ObservedObject var model: NativeMacModel
+    private var recipes: [NativeSummaryRecipe] {
+        NativeSummarySelection.creationRecipes(in: NativeSummarySelection.recipes(formats: model.formats, templates: model.currentSummaryTemplates))
+    }
+    var body: some View {
+        if let host = model.localAI {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                Text(VL.text("Формат саммари")).frame(maxWidth: .infinity, alignment: .leading)
+                Picker(VL.text("Формат автоматического саммари"), selection: selection(host)) {
+                    ForEach(NativeSummaryPresentationCategory.allCases) { category in
+                        Section(category.title) {
+                            ForEach(recipes.filter { $0.category == category }) { recipe in
+                                Text(recipe.title).tag(recipe.id)
+                            }
+                        }
+                    }
+                }.labelsHidden().frame(width: 240)
+            }
         }
     }
-    private func selection(_ host:LocalAIHost)->Binding<String> {
-        Binding(get:{NativeSummarySelection.selected(host.automaticSettings.summaryRecipeID,legacyFormat:nil,in:recipes)?.id ?? NativeSummarySelection.defaultID},set:{id in
-            var value=host.automaticSettings;value.summaryRecipeID=id;host.setAutomaticSettings(value)
+    private func selection(_ host: LocalAIHost) -> Binding<String> {
+        Binding(get: {
+            NativeSummarySelection.selected(host.automaticSettings.summaryRecipeID, legacyFormat: nil, in: recipes)?.id ?? NativeSummarySelection.defaultID
+        }, set: { id in
+            guard recipes.contains(where: { $0.id == id }) else { return }
+            var value = host.automaticSettings
+            value.summaryRecipeID = id
+            host.setAutomaticSettings(value)
         })
+    }
+}
+
+struct NativeAutomaticFormats: View {
+    @ObservedObject var model: NativeMacModel
+    var body: some View {
+        if let host = model.localAI {
+            VStack(alignment: .leading, spacing: 14) {
+                NativeAutomaticRecipePicker(model: model)
+                Text(VL.text("Общий формат для автоматической обработки после синхронизации и конференций. Ручной выбор формата хранится отдельно.")).font(.system(size: 12)).foregroundColor(Ink.secondary).lineSpacing(4)
+                Toggle(VL.text("Создавать визуальное саммари"), isOn: Binding(get: { host.automaticSettings.visual }, set: {
+                    var value = host.automaticSettings; value.visual = $0; host.setAutomaticSettings(value)
+                })).toggleStyle(.checkbox).disabled(!model.automaticSummary)
+                Text(VL.text("Текстовое саммари и инфографика создаются в одном выбранном формате.")).font(.system(size: 12)).foregroundColor(Ink.secondary).lineSpacing(4)
+            }
+        }
+    }
+}
+
+struct NativeRecordingKeyboard: NSViewRepresentable {
+    let model: NativeMacModel
+    func makeCoordinator() -> Coordinator { Coordinator(model: model) }
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(); context.coordinator.view = view; context.coordinator.start()
+        return view
+    }
+    func updateNSView(_ view: NSView, context: Context) { context.coordinator.model = model }
+    static func dismantleNSView(_ view: NSView, coordinator: Coordinator) { coordinator.stop() }
+    @MainActor final class Coordinator {
+        var model: NativeMacModel
+        weak var view: NSView?
+        private var monitor: Any?
+        init(model: NativeMacModel) { self.model = model }
+        func start() {
+            guard monitor == nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                let consumed = MainActor.assumeIsolated {
+                    guard let self else { return false }
+                    return self.handle(event) == nil
+                }
+                return consumed ? nil : event
+            }
+        }
+        func stop() { if let monitor { NSEvent.removeMonitor(monitor) }; monitor = nil }
+        private func handle(_ event: NSEvent) -> NSEvent? {
+            guard let window = view?.window, NSApp.keyWindow === window, event.window === window else { return event }
+            let responder = window.firstResponder
+            let editing = (responder as? NSTextView)?.isEditable == true || responder is NSTextField
+            let modified = !event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty
+            guard let action = NativeRecordingKeyboardPolicy.action(keyCode: event.keyCode, editing: editing, modified: modified,
+                modal: window.attachedSheet != nil || NSApp.modalWindow != nil) else { return event }
+            switch action {
+            case .toggle:
+                guard model.selection?.audioURL != nil else { return event }
+                if !event.isARepeat { model.togglePlayback() }
+                return nil
+            case .previous: return model.navigatePlaybackPhrase(-1) ? nil : event
+            case .next: return model.navigatePlaybackPhrase(1) ? nil : event
+            }
+        }
     }
 }
 
@@ -67,7 +137,7 @@ struct NativePlaybackControls:View {
                         Text(clock(model.progress)).monospacedDigit().font(.system(size: 11)).foregroundColor(Ink.secondary)
                         VStack(spacing: 0) {
                             if !model.waveform.isEmpty {
-                                NativeWaveformView(values: model.waveform, fraction: model.duration > 0 ? model.progress / model.duration : 0) { model.seek($0 * model.duration) }
+                                NativeWaveformView(values: model.waveform, fraction: model.duration > 0 ? model.progress / model.duration : 0, highlights: model.highlightRanges, duration: model.duration) { model.seek($0 * model.duration) }
                                     .accessibilityHidden(true)
                             }
                             // Keep the native slider in every waveform state for
@@ -77,6 +147,22 @@ struct NativePlaybackControls:View {
                                 .accessibilityValue(clock(model.progress) + VL.text(" из ") + clock(model.duration))
                         }
                         Text(clock(model.duration)).monospacedDigit().font(.system(size: 11)).foregroundColor(Ink.secondary)
+                        Button(action: model.addHighlight) {
+                            Image(systemName: "bookmark.fill").foregroundColor(Ink.error)
+                        }.buttonStyle(QuietButton()).help(VL.text("Добавить Highlight · ±10 секунд"))
+                            .accessibilityLabel(VL.text("Добавить Highlight · ±10 секунд"))
+                            .disabled(model.selection?.audioURL == nil || model.duration <= 0)
+                        if !model.highlightPoints.isEmpty {
+                            Menu {
+                                ForEach(model.highlightPoints, id: \.self) { point in
+                                    Button(clock(point)) { model.seek(point) }
+                                    if model.selection?.local?.highlightSeconds?.contains(point) == true {
+                                        Button(VL.text("Удалить Highlight в ") + clock(point)) { model.removeHighlight(point) }
+                                    }
+                                }
+                            } label: { Text("\(model.highlightPoints.count)").foregroundColor(Ink.error) }
+                                .menuStyle(.borderlessButton).fixedSize().help(VL.text("Highlights · перейти к метке или удалить"))
+                        }
                         VectaSelectionButton(title:String(format:"%.2g×",model.playbackRate),label:VL.text("Скорость воспроизведения")) {
                             ForEach([Float(0.75),1,1.25,1.5,2],id:\.self) {rate in Button(String(format:"%.2g×",rate)) {model.setPlaybackRate(rate)}}
                         }
@@ -139,11 +225,18 @@ struct NativeTranscriptRow:View {
     }
     private func transcriptText(_ segment:AISpeechSegment) -> some View {
         let words=model.words(for:segment)
+        let ranges = model.highlightRanges
         var value=AttributedString(words.isEmpty ? segment.text : "")
+        // Without word alignment, color only a completely covered utterance;
+        // never invent word timing by dividing the sentence into equal pieces.
+        if words.isEmpty, ranges.contains(where: { $0.start <= segment.start && $0.end >= segment.end }) {
+            value.foregroundColor = NSColor(Ink.error)
+        }
         for (index,word) in words.enumerated() {
             var part=AttributedString(word.text)
             part.link=URL(string:"vecta-word://\(index)")
-            part.foregroundColor = model.progress>=word.start && model.progress<word.end ? .white : NSColor.labelColor
+            let highlighted = ranges.contains { $0.overlaps(start: word.start, end: word.end) }
+            part.foregroundColor = highlighted ? NSColor(Ink.error) : (model.progress>=word.start && model.progress<word.end ? .white : NSColor.labelColor)
             if model.progress>=word.start && model.progress<word.end { part.backgroundColor=NSColor.darkGray }
             value.append(part)
         }

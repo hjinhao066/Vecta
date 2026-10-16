@@ -33,7 +33,6 @@ import UniformTypeIdentifiers
     func askAssistant(_ question:String) {
         let question=question.trimmingCharacters(in:.whitespacesAndNewlines)
         guard !chatBusy,let host=localAI,let key=conversationKey,let result=analysis,!result.segments.isEmpty,!question.isEmpty,question.count<=2000 else {return}
-        guard host.statuses[host.summaryModel.rawValue]?.state == .installed else {chatError=VL.text("Для работы AI-ассистента установите выбранную модель ИИ");return}
         chat.messages.append(AIChatMessage(role:"user",text:question));chatError=nil
         do {try AIChatStore(root:host.root).save(chat,key:key)} catch {chatError=error.localizedDescription;return}
         let preceding=Array(chat.messages.dropLast()),segments=result.segments
@@ -125,8 +124,11 @@ import UniformTypeIdentifiers
                 try NativeVisualPDF.write(report: report, title: context.title, date: context.date,
                     duration: context.duration, speakers: context.speakers, segments: projection.segments,
                     textSummary: projection.textSummary, fullTextDocument: projection.fullText,
-                    transcript: projection.transcript, to: url)
-            } else if pdf { try NativeTextPDF.write(projection.titledBody, to: url) }
+                    transcript: projection.transcript, formatTitle: context.result.request.format.displayTitle, semantic: context.result.semanticSummary, to: url)
+            } else if pdf {
+                let body=projection.fullText.map {"# "+context.title+"\n\n"+$0.rendered(speakers:context.speakers,markdownHeadings:true)} ?? projection.titledBody
+                try NativeTextPDF.write(body, to: url)
+            }
             else { try AIExportText.plain(projection.titledBody).write(to: url, atomically: true, encoding: .utf8) }
         } catch { analysisMessage = error.localizedDescription }
     }
@@ -141,7 +143,7 @@ enum NativeTextPDF {
             paragraph.lineSpacing=3;paragraph.paragraphSpacing=part.kind == .heading ? 8:10
             paragraph.paragraphSpacingBefore=part.kind == .heading ? 10:0
             if part.kind == .list || part.kind == .quote {paragraph.headIndent=14}
-            attributed.append(NSAttributedString(string:AIExportText.plain(part.text)+"\n",attributes:[.font:part.kind == .code || part.kind == .table ? (NSFont(name:"Menlo-Regular",size:10) ?? NSFont.monospacedSystemFont(ofSize:10,weight:.regular)):(NSFont(name:part.kind == .heading ? "Arial-BoldMT":"ArialMT",size:part.kind == .heading ? 15:11.5) ?? NSFont.systemFont(ofSize:12)),.foregroundColor:NSColor.black,.paragraphStyle:paragraph]))
+            attributed.append(NSAttributedString(string:AIExportText.plain(part.text)+"\n",attributes:[.font:part.kind == .code || part.kind == .table ? (NSFont(name:"Menlo-Regular",size:10) ?? NSFont.monospacedSystemFont(ofSize:10,weight:.regular)):(NSFont(name:part.kind == .heading ? "Arial-BoldMT":"ArialMT",size:part.kind == .heading ? 15:11.5) ?? NSFont.systemFont(ofSize:part.kind == .heading ? 15:11.5,weight:part.kind == .heading ? .bold:.regular)),.foregroundColor:NSColor.black,.paragraphStyle:paragraph]))
         }
         let setter=CTFramesetterCreateWithAttributedString(attributed)
         var box=CGRect(x:0,y:0,width:595,height:842)
@@ -170,10 +172,7 @@ struct NativeAssistantView:View {
     var body:some View {
         VStack(alignment:.leading,spacing:8) {
             HStack {Label(VL.text("Локальный ассистент · ")+(model.localAI?.summaryModel.selectionTitle ?? VL.text("Быстрая · 4B")),systemImage:"sparkles").font(.system(size:12)).foregroundColor(Ink.secondary);Spacer();Menu {Text(VL.text("Ответы строятся по сохранённой расшифровке. Это автоматическое изложение, а не обещания Vecta. Проверяйте источники: поиск может пропустить информацию."))} label:{Image(systemName:"info.circle")}.menuStyle(.borderlessButton).fixedSize().accessibilityLabel(VL.text("Об ассистенте"));if !model.chat.messages.isEmpty {Button(VL.text("Очистить переписку")) {clearing=true}.buttonStyle(QuietButton()).disabled(model.chatBusy)} }
-            if model.localAI?.statuses[model.localAI?.summaryModel.rawValue ?? "qwen4b"]?.state != .installed {
-                Text(VL.text("Для работы AI-ассистента установите выбранную модель ИИ")).foregroundColor(Ink.secondary)
-                Button(VL.text("Перейти к моделям")) {model.destination = .ai}.buttonStyle(QuietButton(primary:true))
-            } else if model.analysis?.segments.isEmpty != false {
+            if model.analysis?.segments.isEmpty != false {
                 Text(VL.text("Сначала распознайте запись. Ассистент отвечает по сохранённой расшифровке.")).foregroundColor(Ink.secondary)
             } else {
                 ScrollViewReader { proxy in

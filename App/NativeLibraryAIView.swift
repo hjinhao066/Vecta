@@ -20,7 +20,7 @@ struct NativeLibraryAIResults:View {
                     Image(systemName:"sparkles").foregroundColor(Ink.secondary)
                     Text(VL.text("Ответ Vecta")).font(.system(size:14,weight:.semibold))
                     Spacer()
-                    if let selected=model.libraryQuestionModel {Text(selected == .qwen9b ? "9B":"4B").font(.system(size:11)).foregroundColor(Ink.muted)}
+                    if let selected=model.libraryQuestionModel {Text(selected.selectionTitle).font(.system(size:11)).foregroundColor(Ink.muted)}
                     Button(action:model.clearLibraryQuestion) {Image(systemName:"xmark").frame(width:24,height:24)}.buttonStyle(.plain).help(VL.text("Очистить вопрос и ответ")).accessibilityLabel(VL.text("Очистить вопрос и ответ"))
                 }
                 if model.search.trimmingCharacters(in:.whitespacesAndNewlines) != model.librarySearchSession.submittedQuestion {Text(model.librarySearchSession.submittedQuestion).font(.system(size:12)).foregroundColor(Ink.secondary).textSelection(.enabled)}

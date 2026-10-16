@@ -49,6 +49,27 @@ enum NativeUIStatePolicy {
     }
 }
 
+enum NativeRecordingKeyboardPolicy {
+    enum Action: Equatable { case toggle, previous, next }
+    static func action(keyCode: UInt16, editing: Bool, modified: Bool, modal: Bool) -> Action? {
+        guard !editing, !modified, !modal else { return nil }
+        switch keyCode {
+        case 49: return .toggle
+        case 123, 126: return .previous
+        case 124, 125: return .next
+        default: return nil
+        }
+    }
+    static func phraseIndex(starts: [Double], position: Double, focused: Int?, direction: Int) -> Int? {
+        guard !starts.isEmpty, position.isFinite, starts.allSatisfy({ $0.isFinite && $0 >= 0 }),
+              zip(starts, starts.dropFirst()).allSatisfy({ $0.0 <= $0.1 }) else { return nil }
+        let current: Int?
+        if let focused, starts.indices.contains(focused), abs(starts[focused] - position) < 0.1 { current = focused }
+        else { current = starts.lastIndex { $0 <= position } }
+        return min(starts.count - 1, max(0, (current ?? (direction > 0 ? -1 : 0)) + (direction > 0 ? 1 : -1)))
+    }
+}
+
 /// Shared confirmation text keeps the destructive scope explicit.
 enum NativeFactoryResetCopy {
     static let explanation = VL.text("Сброс удаляет все записи и настройки на устройстве PLAUD и отключает его от Vecta. Резервная копия не создаётся. Уже сохранённые на Mac аудио, расшифровки и саммари останутся.")

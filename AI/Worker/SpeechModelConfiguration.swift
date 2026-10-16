@@ -11,6 +11,9 @@ enum VectaSpeechModelConfiguration {
     static func usesGPUEncoder(remainingWindows:Int)->Bool {
         (1...3).contains(remainingWindows)
     }
+    static func supportsWarm(remainingWindows:Int)->Bool {
+        (1...32_768).contains(remainingWindows)
+    }
     static func make(modelFolder:String,tokenizerFolder:URL,remainingWindows:Int)->WhisperKitConfig {
         let compute=usesGPUEncoder(remainingWindows:remainingWindows)
             ? ModelComputeOptions(audioEncoderCompute:.cpuAndGPU):ModelComputeOptions()

@@ -63,6 +63,23 @@ import Foundation
         for id in [AISummaryModelID.qwen,.qwen06b,.qwen4b,.qwen9b] {
             try check(JSONDecoder().decode(AISummaryModelID.self,from:JSONEncoder().encode(id)) == id,"Codable model identifier preserved")
         }
-        print("PASS \(checks) legacy model compatibility/recovery/retry checks; synthetic data only")
+        try check(retry.wantsDiarization && retry.wantsSummary, "historical jobs retain diarization and summary defaults")
+        var conference = retry
+        conference.conference = AIConferenceProcessingOptions(diarization: false, recognizeKnownVoices: false, summary: false)
+        conference.visualEnabled = true
+        try conference.validate()
+        try check(!conference.wantsDiarization && !conference.wantsSummary && !conference.wantsVisual, "transcription-only conference does not require speaker/summary stages")
+        let decodedConference = try JSONDecoder().decode(AIProcessingRequest.self, from: JSONEncoder().encode(conference))
+        try check(decodedConference == conference && decodedConference.conference?.recognizeKnownVoices == false, "conference settings survive request persistence")
+        let result = AIProcessingResult(version: 1, request: conference, stage: .completed, transcript: "Synthetic transcript only", segments: [], summary: nil, error: nil, updatedAt: Date(), duration: 1, recognitionSeconds: 1, summarySeconds: nil)
+        try result.validate()
+        let plan = AIProgressPlan(result: result)
+        try check(!plan.stages.contains(.diarizing) && !plan.stages.contains(.summarizing) && !plan.stages.contains(.visualizing), "disabled conference stages remain absent from progress")
+        var automation = AIAutomaticSettings()
+        automation.conference = conference.conference; automation.visual = false
+        let decodedAutomation = try JSONDecoder().decode(AIAutomaticSettings.self, from: JSONEncoder().encode(automation))
+        try check(decodedAutomation == automation, "automatic conference options survive durable queue settings")
+        try check(JSONDecoder().decode(AIAutomaticSettings.self, from: Data("{}".utf8)).conference == nil, "old automatic settings keep their legacy scope")
+        print("PASS \(checks) legacy model compatibility/recovery/retry and conference-processing checks; synthetic data only")
     }
 }

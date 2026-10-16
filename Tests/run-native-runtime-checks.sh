@@ -17,6 +17,7 @@ sources=(
   Storage/VectaRecordingStore.swift
   Storage/VectaSummaryFormatStore.swift
   Storage/VectaLocalAudioExporter.swift
+  Storage/NativeRecordingPurge.swift
   App/NativeCompatibility.swift
   App/NativeStorageLayout.swift
   App/Lifecycle/RuntimeOwnership.swift

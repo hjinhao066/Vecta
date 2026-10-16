@@ -5,549 +5,82 @@ struct NativeVisualPreparationInput:Equatable {
     let report:AIVisualSummary
     let semantic:AISemanticSummary?
     let speakers:AIRecordingSpeakers
-}
-struct NativeVisualTextParts {
-    let main:String
-    let detail:String?
+    var formatTitle:String?=nil
 }
 struct NativePreparedVisualDocument {
     let displayed:AIVisualSummary
-    let icons:[String:String]
-    let markdown:[String:AttributedString]
-    let previews:[String:NativeVisualTextParts]
-    let narratives:[String:NativeVisualTextParts]
+    let composition:NativeVisualComposition
 }
 
-/// Immutable, bounded preparation. No Markdown or speaker projection in view construction.
+/// Immutable bounded preparation; native text measurement never happens in body.
 actor NativeVisualPreparation {
     static let shared=NativeVisualPreparation()
-    private var recent:[(NativeVisualPreparationInput,NativePreparedVisualDocument,Set<String>)]=[]
-    func prepare(_ input:NativeVisualPreparationInput,supportedSymbols:Set<String>) throws -> NativePreparedVisualDocument {
+    private var recent:[(NativeVisualPreparationInput,NativePreparedVisualDocument)]=[]
+    func prepare(_ input:NativeVisualPreparationInput) throws -> NativePreparedVisualDocument {
         try Task.checkCancellation()
-        if let index=recent.firstIndex(where:{$0.0==input && $0.2==supportedSymbols}) {
+        if let index=recent.firstIndex(where:{$0.0==input}) {
             let entry=recent.remove(at:index);recent.append(entry);return entry.1
         }
         let displayed=AIVisualEditorial.refined(input.speakers.renderedVisual(input.semantic?.visual(style:.editorial) ?? input.report))
-        let icons=AIVisualIconCatalog.allocate(displayed,supported:supportedSymbols)
-        var texts=Set<String>(),previews=[String:NativeVisualTextParts](),narratives=[String:NativeVisualTextParts]()
-        func prepareText(_ text:String) {
-            texts.insert(text)
-            let preview=AIVisualEditorial.preview(text),narrative=AIVisualEditorial.narrative(text)
-            previews[text]=NativeVisualTextParts(main:preview.main,detail:preview.detail)
-            narratives[text]=NativeVisualTextParts(main:narrative.main,detail:narrative.detail)
-            texts.insert(preview.main);if let detail=preview.detail {texts.insert(detail)}
-            texts.insert(narrative.main);if let detail=narrative.detail {texts.insert(detail)}
-            let lead=AIVisualEditorial.preview(narrative.main)
-            previews[narrative.main]=NativeVisualTextParts(main:lead.main,detail:lead.detail)
-            texts.insert(lead.main);if let detail=lead.detail {texts.insert(detail)}
-        }
-        for block in displayed.blocks {
-            try Task.checkCancellation()
-            prepareText(block.title)
-            for item in block.items {
-                let text=input.speakers.render(item.tokens)
-                prepareText(item.title);prepareText(text);prepareText("«"+text+"»")
-            }
-        }
-        var markdown=[String:AttributedString]()
-        for text in texts {
-            try Task.checkCancellation()
-            markdown[text]=(try? AttributedString(markdown:text,options:.init(interpretedSyntax:.inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
-        }
-        let value=NativePreparedVisualDocument(displayed:displayed,icons:icons,markdown:markdown,previews:previews,narratives:narratives)
+        let composition=try NativeVisualComposer.make(report:displayed,speakers:input.speakers,formatTitle:input.formatTitle,semantic:input.semantic)
+        let value=NativePreparedVisualDocument(displayed:displayed,composition:composition)
         try Task.checkCancellation()
-        if texts.reduce(0,{$0+$1.utf8.count})<=2_000_000 {
-            recent.append((input,value,supportedSymbols));recent=Array(recent.suffix(2))
-        }
+        recent.append((input,value));recent=Array(recent.suffix(2))
         return value
     }
 }
 
-/// Editorial colors adapt to the app appearance. PDF has its own always-light palette.
-private enum VectaInfographicPalette {
-    static let canvas = Color.white
-    static let text = Color(red: 0.075, green: 0.090, blue: 0.115)
-    static let secondary = Color(red: 0.31, green: 0.35, blue: 0.40)
-    static let border = Color(red: 0.82, green: 0.86, blue: 0.92)
-    static let white = Color.white.opacity(0.78)
-    static let pink = Color(red: 0.985, green: 0.925, blue: 0.935)
-    static let blue = Color(red: 0.905, green: 0.935, blue: 0.985)
-    static let cyan = Color(red: 0.885, green: 0.955, blue: 0.970)
-    static let green = Color(red: 0.875, green: 0.945, blue: 0.805)
-    static let cream = Color(red: 0.985, green: 0.965, blue: 0.875)
-    static func fill(_ type: AIVisualBlockType) -> Color {
-        switch type {
-        case .hero, .risks, .quotes: return pink
-        case .comparison, .openQuestions, .conceptMap: return blue
-        case .keyPoints, .statistics, .chart: return cyan
-        case .decisions, .tasks, .takeaway: return green
-        case .timeline, .processFlow, .decisionMatrix: return cream
-        }
-    }
-}
-
-/// Allocate unique reference colors by document position, never by block type.
-private enum NativeEditorialDecorations {
-    static let supportedSymbols = Set(AIVisualIconCatalog.symbols.filter { NSImage(systemSymbolName: $0, accessibilityDescription: nil) != nil })
-    static func fill(_ index: Int, psychological: Bool) -> Color {
-        let c=AIVisualEditorialPalette.color(index,psychological:psychological)
-        return Color(red:c.red,green:c.green,blue:c.blue)
-    }
-}
-
-/// Declarative documents only: geometry is native, never generated by the model.
+/// One logical canvas; viewport changes never reflow its text or cards.
 struct NativeVisualSummaryView:View {
     @Environment(\.colorScheme) private var colorScheme
     let report:AIVisualSummary
     var semantic:AISemanticSummary?=nil
-    var variantOverride:AIVisualComponentVariant?=nil
-    private var modern:Bool {semantic != nil || variantOverride != nil}
-    private func variant(_ block:AIVisualBlock,in row:[AIVisualBlock])->AIVisualComponentVariant {
-        let available=(width-44-14*CGFloat(max(0,row.count-1)))*CGFloat(AIVisualLayoutPlan.share(block,in:row))
-        let wide=available>=300
-        if available<600,variantOverride == .threeColumns {return .stack}
-        if let variantOverride {let selected=AIVisualComponentDescriptor(type:block.type,variant:variantOverride);return selected.supports(block,wide:wide) ? variantOverride:.stack}
-        let selected=AIVisualComponentRegistry.select(block,style:style,wide:wide).variant
-        // Supporting questions/risks do not carry a lead thesis. Making the
-        // first of two entries "featured" falsely competes with the hero and
-        // visually assigns priority that the semantic record never supplied.
-        if [.openQuestions,.risks].contains(block.type),selected == .featured {return .stack}
-        return selected
-    }
-    private let style:AIVisualStyle = .editorial
-    @State private var prepared:NativePreparedVisualDocument?
-    @State private var preparedInput:NativeVisualPreparationInput?
-    @State private var preparation:Task<Void,Never>?
-    @State private var preparationGeneration=UUID()
-    private var input:NativeVisualPreparationInput {.init(report:report,semantic:semantic,speakers:speakers)}
-    private var displayed:AIVisualSummary {prepared?.displayed ?? report}
-    private var icons:[String:String] {prepared?.icons ?? [:]}
-    private let formatTitle:String?
-    init(report:AIVisualSummary,semantic:AISemanticSummary?=nil,variantOverride:AIVisualComponentVariant?=nil,formatTitle:String?=nil,speakers:AIRecordingSpeakers,segments:[AISpeechSegment],play:@escaping (AISpeechSegment)->Void) {
-        self.report=report;self.semantic=semantic;self.variantOverride=variantOverride
-        self.speakers=speakers;self.segments=segments;self.play=play
-        self.formatTitle=formatTitle
-    }
+    var formatTitle:String?=nil
     let speakers:AIRecordingSpeakers
     let segments:[AISpeechSegment]
     var play:(AISpeechSegment)->Void
-    @State private var width:CGFloat=700
+    @State private var prepared:NativePreparedVisualDocument?
+    @State private var preparedInput:NativeVisualPreparationInput?
+    @State private var preparation:Task<Void,Never>?
+    @State private var generation=UUID()
+    @State private var failure=false
+    private var input:NativeVisualPreparationInput {.init(report:report,semantic:semantic,speakers:speakers,formatTitle:formatTitle)}
     var body:some View {
-        Group {
-            if prepared != nil,preparedInput==input {document}
-            else {HStack(spacing:10) {ProgressView().controlSize(.small);Text(VL.text("Подготавливаем сохранённый отчёт…")).font(.system(size:12)).foregroundColor(Ink.secondary)}.frame(maxWidth:.infinity,alignment:.leading).padding(12)}
-        }
-        .onAppear(perform:prepare)
-        .onChange(of:input) {_ in prepare()}
+        VStack(alignment:.leading,spacing:10) {
+            if let prepared,preparedInput==input {
+                NativeVisualCanvas(document:prepared.composition,dark:colorScheme == .dark)
+                    .aspectRatio(1200.0/840.0,contentMode:.fit)
+                    .accessibilityElement(children:.ignore)
+                    .accessibilityLabel(prepared.composition.readableText)
+                // Complete saved content remains available without enlarging the infographic.
+                DisclosureGroup(VL.text("Полное содержание визуального отчёта")) {
+                    Text(prepared.composition.completeText).font(.system(size:14)).textSelection(.enabled)
+                        .fixedSize(horizontal:false,vertical:true)
+                }.font(.system(size:12)).foregroundColor(Ink.secondary)
+            } else {
+                ZStack {
+                    Color.clear
+                    if failure {Text(VL.text("Не удалось подготовить сохранённый отчёт. Исходные данные не изменены."))}
+                    else {ProgressView(VL.text("Подготавливаем сохранённый отчёт…"))}
+                }.aspectRatio(1200.0/840.0,contentMode:.fit)
+            }
+        }.frame(maxWidth:1200,alignment:.leading)
+        .onAppear(perform:prepare).onChange(of:input) {_ in prepare()}
         .onDisappear {preparation?.cancel()}
     }
     private func prepare() {
-        preparation?.cancel()
-        let expected=input,token=UUID(),symbols=NativeEditorialDecorations.supportedSymbols
-        preparationGeneration=token
+        preparation?.cancel();failure=false
+        let expected=input,token=UUID()
+        generation=token
         preparation=Task(priority:.utility) {
             do {
-                let value=try await NativeVisualPreparation.shared.prepare(expected,supportedSymbols:symbols)
-                guard !Task.isCancelled,preparationGeneration==token else{return}
+                let value=try await NativeVisualPreparation.shared.prepare(expected)
+                guard !Task.isCancelled,generation==token else {return}
                 prepared=value;preparedInput=expected
-            } catch is CancellationError {} catch {}
-        }
-    }
-    private var document:some View {
-        LazyVStack(alignment:.leading,spacing:8) {
-            HStack(alignment:.center,spacing:10) {
-                Text(formatTitle ?? displayed.category ?? VL.text("Обзор записи"))
-                    .font(.system(size:11,weight:.semibold))
-                    .foregroundColor(colorScheme == .dark ? reportText : Color(red:0.12,green:0.30,blue:0.40))
-                    .padding(.horizontal,8).padding(.vertical,3)
-                    .background(VectaInfographicPalette.blue.opacity(colorScheme == .dark ? 0.22 : 1))
-                    .clipShape(Capsule())
-                Spacer(minLength:8)
-                EmptyView()
-            }
-            Text(displayed.title)
-                .font(.system(size:width<740 ? 22:24,weight:.bold))
-                .lineSpacing(2)
-                .fixedSize(horizontal:false,vertical:true)
-            if let subtitle=displayed.subtitle ?? report.subtitle,!subtitle.isEmpty {
-                Text(subtitle).font(.system(size:12.5,weight:.medium)).foregroundColor(reportSecondary).fixedSize(horizontal:false,vertical:true)
-            }
-            if displayed.blocks.isEmpty {Text(VL.text("Нет сохранённых визуальных данных")).font(.system(size:13)).foregroundColor(reportSecondary)}
-            ForEach(Array(AIVisualLayoutPlan.rows(displayed,wide:width>=660 && style != .minimal && style != .presentation).enumerated()),id:\.offset) {_,row in
-                NativeVisualRowLayout(row:row) {
-                    ForEach(row) {block in blockView(block,in:row)}
-                }
-            }
-        }.padding(8).frame(maxWidth:1120,alignment:.leading)
-        .foregroundColor(reportText)
-        .background(reportCanvas).cornerRadius(4)
-        .background(GeometryReader {proxy in
-            Color.clear.onAppear {width=proxy.size.width}
-                .onChange(of:proxy.size.width) {width=$0}
-        })
-    }
-    private func blockView(_ block:AIVisualBlock,in row:[AIVisualBlock])->AnyView {
-        if block.type == .hero { return AnyView(heroBlockView(block)) }
-        if variant(block,in:row) == .verdict {return AnyView(verdictBlockView(block))}
-        return AnyView(regularBlockView(block,in:row))
-    }
-    private func heroBlockView(_ block:AIVisualBlock)->some View {
-        let lead=block.items.first
-        let text=lead.map {speakers.render($0.tokens)} ?? ""
-        let narrative=prepared?.narratives[text] ?? NativeVisualTextParts(main:text,detail:nil)
-        return VStack(alignment:.leading,spacing:12) {
-            HStack(alignment:.top,spacing:18) {
-                VStack(alignment:.leading,spacing:10) {
-                    HStack(spacing:8) {
-                        Image(systemName:contextSymbol(block)).font(.system(size:15,weight:.regular)).foregroundColor(reportSecondary)
-                        Text(block.title).font(.system(size:17,weight:.bold)).fixedSize(horizontal:false,vertical:true)
-                    }
-                    if let role=block.role,role == .hypothesis {Text(roleLabel(role)).font(.system(size:11,weight:.medium)).foregroundColor(reportSecondary)}
-                    if let lead {
-                        editorialProse(narrative.main,emphasized:true)
-                            .padding(12).frame(maxWidth:.infinity,alignment:.leading)
-                            .background(colorScheme == .dark ? Color.white.opacity(0.055) : Color.white.opacity(0.7))
-                            .cornerRadius(4).overlay(RoundedRectangle(cornerRadius:4).stroke(reportBorder.opacity(0.7),lineWidth:1))
-                        if let detail=narrative.detail {
-                            HStack(alignment:.top,spacing:9) {
-                                itemIcon(lead,block:block).padding(.top,3)
-                                richText(detail).font(.system(size:12.5)).lineSpacing(3).fixedSize(horizontal:false,vertical:true)
-                            }.padding(.top,5)
-                        }
-                        if hasMetadata(lead) {itemMetadata(lead)};sources(lead.sourceSegments)
-                    }
-                }.frame(maxWidth:.infinity,alignment:.leading)
-                if let lead,let value=lead.value {
-                    VStack(spacing:5) {
-                        EmptyView()
-                        Text(value).font(.system(size:34,weight:.bold,design:.rounded)).monospacedDigit().lineLimit(2).minimumScaleFactor(0.72)
-                        Text(lead.title).font(.system(size:11,weight:.semibold)).multilineTextAlignment(.center).fixedSize(horizontal:false,vertical:true)
-                    }.frame(minWidth:120,maxWidth:180,minHeight:120).padding(14).background(VectaInfographicPalette.blue.opacity(colorScheme == .dark ? 0.24 : 1)).cornerRadius(10)
-                }
-            }
-            if block.items.count > 1 {
-                Divider().overlay(reportBorder)
-                ForEach(Array(block.items.dropFirst().enumerated()),id:\.offset) {_,item in itemView(item,block:block)}
-            }
-        }
-        .padding(14)
-        .frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
-        .background(blockSurface(block))
-        .cornerRadius(4)
-        .overlay(RoundedRectangle(cornerRadius:4).stroke(reportBorder,lineWidth:1))
-    }
-    private func verdictBlockView(_ block:AIVisualBlock)->some View {
-        VStack(spacing:9) {
-            Image(systemName:contextSymbol(block)).font(.system(size:26,weight:.regular)).foregroundColor(reportSecondary)
-            Text(block.type == .openQuestions ? VL.text("Открытый вопрос"):block.type == .decisions && block.role == .fact ? VL.text("Решение"):block.role == .hypothesis ? VL.text("Гипотеза"):block.role == .position ? VL.text("Предложение"):VL.text("Главный вывод"))
-                .font(.system(size:10,weight:.semibold)).textCase(.uppercase).tracking(1.2).foregroundColor(reportSecondary)
-            Text(block.title).font(.system(size:22,weight:.bold)).lineSpacing(2).fixedSize(horizontal:false,vertical:true)
-            if let item=block.items.first {
-                if let caption=AIVisualEditorial.caption(speakers.render(item.tokens),title:item.title) {
-                    Text(caption).font(.system(size:12.5)).lineSpacing(3).foregroundColor(reportSecondary).fixedSize(horizontal:false,vertical:true).textSelection(.enabled)
-                }
-                if hasMetadata(item) {itemMetadata(item)}
-            }
-            if let role=block.role,role == .hypothesis {Text(roleLabel(role)).font(.system(size:10)).foregroundColor(reportSecondary)}
-        }.multilineTextAlignment(.center).padding(18).frame(maxWidth:.infinity,maxHeight:.infinity)
-            .background(blockSurface(block))
-            .cornerRadius(4)
-    }
-    private func regularBlockView(_ block:AIVisualBlock,in row:[AIVisualBlock])->some View {
-        let selectedVariant=variant(block,in:row)
-        return VStack(alignment:.leading,spacing:12) {
-            if !(block.type == .statistics && block.items.count == 1 && block.items.first?.value != nil) {
-                HStack(alignment:.top) {
-                    Image(systemName:contextSymbol(block)).font(.system(size:16,weight:.regular)).foregroundColor(accent(block))
-                    Text(block.title).font(.system(size:style == .presentation ? 23:17,weight:.bold)).fixedSize(horizontal:false,vertical:true)
-                    Spacer(minLength:0)
-                }
-            }
-            if let role=block.role,role == .hypothesis {Text(roleLabel(role)).font(.system(size:10,weight:.medium)).foregroundColor(reportSecondary)}
-            if [.chart,.processFlow,.conceptMap].contains(block.type) {
-                NativeVisualDiagram(block:block,compact:width<660)
-                    .frame(height:NativeVisualDiagramPainter.height(block,compact:width<660))
-                    .accessibilityLabel(block.items.map {$0.title+": "+($0.value ?? speakers.render($0.tokens))}.joined(separator:"; "))
-            }
-            if let edges=block.edges,!edges.isEmpty {
-                ForEach(Array(edges.enumerated()),id:\.offset) {_,edge in
-                    VStack(alignment:.leading,spacing:4) {
-                        if edge.label.count>30 {Text(edge.label).font(.system(size:11)).foregroundColor(reportSecondary).fixedSize(horizontal:false,vertical:true)}
-                    }
-                }
-            }
-            if [.chart,.processFlow,.conceptMap].contains(block.type) {
-                sources(Array(Set(block.items.flatMap(\.sourceSegments)+(block.edges ?? []).flatMap(\.sourceSegments))).sorted())
-            }
-            if variantOverride == nil && [AIVisualBlockType.statistics,.comparison].contains(block.type) && block.items.allSatisfy({$0.value != nil}) {
-                metricItems(block)
-            } else if variantOverride == nil && [.tasks,.timeline].contains(block.type) && block.items.count>1 {
-                numberedItems(block)
-            } else if modern && ![AIVisualComponentVariant.stack,.columns,.matrix].contains(selectedVariant) {
-                composedItems(block,variant:selectedVariant)
-            } else if modern && selectedVariant == .matrix {
-                ForEach(Array(block.items.enumerated()),id:\.offset) {_,item in
-                    HStack(alignment:.top,spacing:14) {
-                        Text(item.title).font(.system(size:12,weight:.semibold)).frame(width:140,alignment:.leading).fixedSize(horizontal:false,vertical:true)
-                        VStack(alignment:.leading,spacing:6) {
-                            if let value=item.value {Text(value).font(.system(size:22,weight:.semibold)).monospacedDigit()}
-                            Text(speakers.render(item.tokens)).font(.system(size:13)).textSelection(.enabled).fixedSize(horizontal:false,vertical:true)
-                            itemMetadata(item)
-                            sources(item.sourceSegments)
-                        }
-                    }.padding(.vertical,8)
-                    Divider().overlay(reportBorder)
-                }
-            } else if (modern && selectedVariant == .columns) || (!modern && (block.type == .comparison || block.type == .statistics)) {
-                LazyVGrid(columns:[GridItem(.adaptive(minimum:150),alignment:.top)],alignment:.leading,spacing:12) {
-                    ForEach(Array(block.items.enumerated()),id:\.offset) {_,item in itemView(item,block:block).padding(12).frame(maxWidth:.infinity,alignment:.leading).background(innerCard(block)).cornerRadius(4)}
-                }
-            } else if !modern && block.type == .decisionMatrix {
-                ForEach(Array(block.items.enumerated()),id:\.offset) {_,item in
-                    HStack(alignment:.top,spacing:12) {Text(item.title).font(.system(size:12,weight:.semibold)).frame(width:width<500 ? 90:140,alignment:.leading);VStack(alignment:.leading,spacing:6) {Text(speakers.render(item.tokens)).font(.system(size:12));sources(item.sourceSegments)}}.padding(.vertical,8)
-                    Divider().overlay(reportBorder)
-                }
-            } else {
-                ForEach(Array(block.items.enumerated()),id:\.offset) {index,item in
-                    HStack(alignment:.top,spacing:10) {
-                        if block.type == .timeline {Text(String(format:"%02d",index+1)).font(.system(size:11,weight:.semibold)).foregroundColor(reportSecondary)}
-                        itemView(item,block:block)
-                    }
-                }
-            }
-        }.padding(14).frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
-        .background(style == .minimal ? Color.clear : blockSurface(block)).cornerRadius(4)
-        .overlay(RoundedRectangle(cornerRadius:4).stroke(style == .minimal ? Color.clear : reportBorder,lineWidth:1))
-        
-    }
-    // Metric typography is driven by explicit validated values. A single
-    // metric becomes a poster; multiple metrics remain separate comparable
-    // tiles. Never derive a numeric score from prose.
-    private func metricItems(_ block:AIVisualBlock)->some View {
-        LazyVGrid(columns:block.items.count == 1 ? [GridItem(.flexible(),alignment:.center)] : [GridItem(.adaptive(minimum:150),alignment:.top)],alignment:.leading,spacing:12) {
-            ForEach(Array(block.items.enumerated()),id:\.offset) {_,item in
-                VStack(alignment:block.items.count == 1 ? .center:.leading,spacing:10) {
-                    if block.items.count == 1 {Text(block.title).font(.system(size:10,weight:.semibold)).textCase(.uppercase).tracking(0.6)}
-                    Text(item.value ?? "").font(.system(size:block.items.count == 1 ? 40:24,weight:.bold,design:.rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.55).frame(maxWidth:.infinity,alignment:block.items.count == 1 ? .center:.leading)
-                    Text(item.title).font(.system(size:14,weight:.semibold)).fixedSize(horizontal:false,vertical:true)
-                    if let caption=AIVisualEditorial.caption(speakers.render(item.tokens),title:item.title),!caption.isEmpty {
-                        Text(caption).font(.system(size:13)).lineSpacing(3).foregroundColor(reportSecondary).fixedSize(horizontal:false,vertical:true).textSelection(.enabled)
-                    }
-                    itemMetadata(item);sources(item.sourceSegments)
-                }
-                .multilineTextAlignment(block.items.count == 1 ? .center:.leading)
-                .padding(block.items.count == 1 ? 14:12)
-                .frame(maxWidth:.infinity,alignment:block.items.count == 1 ? .center:.leading)
-                .background(block.items.count == 1 ? Color.clear:editorialCard).cornerRadius(4)
-            }
-        }.frame(maxHeight:.infinity,alignment:.center)
-    }
-    private func numberedItems(_ block:AIVisualBlock)->some View {
-        VStack(alignment:.leading,spacing:15) {
-            ForEach(Array(block.items.enumerated()),id:\.offset) {index,item in
-                HStack(alignment:.top,spacing:12) {
-                    Text("\(index+1)").font(.system(size:12,weight:.bold)).monospacedDigit()
-                        .frame(width:24,height:24)
-                        .background(accent(block).opacity(colorScheme == .dark ? 0.24:0.12)).clipShape(Circle())
-                    itemView(item,block:block)
-                }
-            }
-        }
-    }
-    // Each registry topology has an actual native rendering path. Content and
-    // source buttons remain shared; no semantic hierarchy is inferred from layout.
-    private func composedItems(_ block:AIVisualBlock,variant:AIVisualComponentVariant)->AnyView {
-        let items=Array(block.items.enumerated())
-        switch variant {
-        case .tiles,.threeColumns:
-            let count=variant == .tiles ? 2:3
-            return AnyView(LazyVGrid(columns:Array(repeating:GridItem(.flexible(),alignment:.top),count:count),alignment:.leading,spacing:12) {
-                ForEach(items,id:\.offset) {_,item in itemView(item,block:block).padding(14).background(innerCard(block)).cornerRadius(4)}
-            })
-        case .horizontal:
-            return AnyView(ScrollView(.horizontal) {HStack(alignment:.top,spacing:14) {ForEach(items,id:\.offset) {_,item in itemView(item,block:block).frame(width:240).padding(14).background(innerCard(block)).cornerRadius(4)}}})
-        case .split:
-            return AnyView(HStack(alignment:.top,spacing:24) {
-                if let first=block.items.first {itemView(first,block:block).frame(maxWidth:.infinity,alignment:.leading)}
-                Divider()
-                VStack(alignment:.leading,spacing:12) {ForEach(Array(items.dropFirst()),id:\.offset) {_,item in itemView(item,block:block)}}.frame(maxWidth:.infinity,alignment:.leading)
-            })
-        case .featured:
-            return AnyView(VStack(alignment:.leading,spacing:16) {
-                if let first=block.items.first {
-                    Text(first.value ?? first.title).font(.system(size:17,weight:.bold)).fixedSize(horizontal:false,vertical:true)
-                    if first.value != nil {Text(first.title).font(.system(size:14,weight:.semibold))}
-                    Text(speakers.render(first.tokens)).font(.system(size:12.5)).fixedSize(horizontal:false,vertical:true)
-                    itemMetadata(first);sources(first.sourceSegments)
-                }
-                Divider()
-                HStack(alignment:.top,spacing:18) {ForEach(Array(items.dropFirst()),id:\.offset) {_,item in itemView(item,block:block)}}
-            })
-        case .poster:
-            return AnyView(VStack(spacing:22) {ForEach(items,id:\.offset) {_,item in
-                VStack(spacing:10) {
-                    Text(item.value ?? item.title).font(.system(size:30,weight:.semibold)).multilineTextAlignment(.center).fixedSize(horizontal:false,vertical:true)
-                    Text(speakers.render(item.tokens)).font(.system(size:16)).multilineTextAlignment(.center).fixedSize(horizontal:false,vertical:true)
-                    itemMetadata(item)
-                    sources(item.sourceSegments)
-                }.frame(maxWidth:.infinity).padding(.vertical,10)
-            }})
-        case .compact:
-            return AnyView(VStack(alignment:.leading,spacing:8) {ForEach(items,id:\.offset) {_,item in
-                VStack(alignment:.leading,spacing:4) {
-                    Text(item.title+" — "+speakers.render(item.tokens)).font(.system(size:12)).fixedSize(horizontal:false,vertical:true).textSelection(.enabled)
-                    if let value=item.value {Text(value).font(.system(size:16,weight:.semibold))}
-                    itemMetadata(item)
-                    sources(item.sourceSegments)
-                }
-            }})
-        case .sourceRail:
-            return AnyView(VStack(alignment:.leading,spacing:14) {ForEach(items,id:\.offset) {_,item in
-                HStack(alignment:.top,spacing:16) {
-                    Rectangle().fill(reportBorder).frame(width:2)
-                    itemView(item,block:block,includeSources:false)
-                }.fixedSize(horizontal:false,vertical:true)
-            }})
-        case .alternating:
-            return AnyView(VStack(alignment:.leading,spacing:18) {ForEach(items,id:\.offset) {index,item in
-                HStack(alignment:.top,spacing:16) {
-                    if index%2==1 {Spacer(minLength:40)}
-                    itemView(item,block:block).padding(14).background(innerCard(block)).cornerRadius(4)
-                    if index%2==0 {Spacer(minLength:40)}
-                }
-            }})
-        case .numbered,.timeline:
-            return AnyView(VStack(alignment:.leading,spacing:0) {ForEach(items,id:\.offset) {index,item in
-                HStack(alignment:.top,spacing:16) {
-                    VStack(spacing:0) {
-                        if variant == .numbered {Text(String(format:"%02d",index+1)).font(.system(size:17,weight:.bold)).monospacedDigit()}
-                        else {Circle().fill(reportText).frame(width:9,height:9).padding(.top,5);Rectangle().fill(reportBorder).frame(width:1).frame(minHeight:48)}
-                    }.frame(width:36)
-                    itemView(item,block:block).padding(.bottom,18)
-                }
-            }})
-        default:return AnyView(VStack(alignment:.leading,spacing:12) {ForEach(items,id:\.offset) {_,item in itemView(item,block:block)}})
-        }
-    }
-    @ViewBuilder private func editorialProse(_ text:String,emphasized:Bool=false)->some View {
-        let parts=prepared?.previews[text] ?? NativeVisualTextParts(main:text,detail:nil)
-        VStack(alignment:.leading,spacing:6) {
-            richText(parts.main).font(.system(size:12.5,weight:emphasized ? .medium:.regular))
-                .foregroundColor(emphasized ? reportText:reportSecondary).lineSpacing(2)
-                .textSelection(.enabled).fixedSize(horizontal:false,vertical:true)
-            if let detail=parts.detail {
-                DisclosureGroup(VL.text("Подробнее")) {
-                    richText(detail).font(.system(size:12.5)).foregroundColor(reportSecondary)
-                        .lineSpacing(2).textSelection(.enabled).fixedSize(horizontal:false,vertical:true)
-                }.font(.system(size:11,weight:.medium)).foregroundColor(reportSecondary)
-            }
-        }
-    }
-    private func hasMetadata(_ item:AIVisualItem)->Bool {item.speakerID != nil || item.date != nil || item.deadline != nil}
-    private func itemMetadata(_ item:AIVisualItem)->some View {
-        VStack(alignment:.leading,spacing:4) {
-            if let id=item.speakerID {Text(speakers.name(id)).font(.system(size:11)).foregroundColor(reportSecondary)}
-            if let date=item.date {Text(date).font(.system(size:11,weight:.medium))}
-            if let deadline=item.deadline,deadline != item.date {Text(deadline).font(.system(size:11,weight:.medium))}
-        }
-    }
-    private func itemView(_ item:AIVisualItem,block:AIVisualBlock,includeSources:Bool=true)->some View {
-        HStack(alignment:.top,spacing:9) {
-            if ![AIVisualBlockType.quotes,.statistics,.chart,.processFlow,.conceptMap,.timeline].contains(block.type) && (block.type != .tasks || block.items.count == 1) {itemIcon(item,block:block).frame(width:18).padding(.top,2)}
-            VStack(alignment:.leading,spacing:5) {
-                if let value=item.value {Text(value).font(.system(size:24,weight:.bold)).monospacedDigit().fixedSize(horizontal:false,vertical:true)}
-                if !item.title.isEmpty && !(block.items.count == 1 && item.title == block.title) && block.type != .hero && ![AIVisualBlockType.chart,.processFlow,.conceptMap].contains(block.type) {richText(item.title).font(.system(size:12.5,weight:.semibold)).fixedSize(horizontal:false,vertical:true)}
-                if block.type == .quotes {
-                    HStack(alignment:.top,spacing:9) {Rectangle().fill(accent(block).opacity(0.5)).frame(width:2);richText("«"+speakers.render(item.tokens)+"»").font(.system(size:12.5)).italic().fixedSize(horizontal:false,vertical:true)}.padding(9).background(editorialCard).cornerRadius(3).fixedSize(horizontal:false,vertical:true)
-                } else if ![AIVisualBlockType.chart,.processFlow,.conceptMap].contains(block.type) || AIVisualEditorial.caption(speakers.render(item.tokens),title:item.title) != nil {editorialProse(speakers.render(item.tokens))}
-                if hasMetadata(item) {itemMetadata(item)}
-                if includeSources {sources(item.sourceSegments)}
-            }.frame(maxWidth:.infinity,alignment:.leading)
-        }
-    }
-    private func sources(_ ids:[Int])->some View {
-        // Preserve decoding of historical evidence without displaying source links.
-        EmptyView()
-    }
-    private func accent(_ block:AIVisualBlock)->Color {
-        switch block.type {case .risks,.openQuestions:return Color(red:0.65,green:0.37,blue:0.22);case .decisions,.tasks,.takeaway:return Color(red:0.27,green:0.53,blue:0.38);case .comparison,.chart,.statistics:return Color(red:0.30,green:0.48,blue:0.64);default:return reportSecondary}
-    }
-    private var reportCanvas: Color { colorScheme == .dark ? Ink.surface : Color(red:0.978,green:0.982,blue:0.987) }
-    private var reportText: Color { colorScheme == .dark ? Ink.text : VectaInfographicPalette.text }
-    // Coloured dark cards require a brighter secondary than the application
-    // chrome. Body copy must remain readable without losing title hierarchy.
-    private var reportSecondary: Color { colorScheme == .dark ? Color(red:0.76,green:0.80,blue:0.84) : VectaInfographicPalette.secondary }
-    private var reportBorder: Color { colorScheme == .dark ? VectaInfographicPalette.border.opacity(0.2) : VectaInfographicPalette.border }
-    private var editorialCard: Color { colorScheme == .dark ? Color.white.opacity(0.05) : VectaInfographicPalette.white }
-    private func innerCard(_ block: AIVisualBlock) -> Color {
-        colorScheme == .dark ? blockSurface(block).opacity(0.78) : VectaInfographicPalette.white
-    }
-    private func blockSurface(_ block:AIVisualBlock)->Color {
-        let index=displayed.blocks.firstIndex { $0.id == block.id } ?? 0
-        let c=AIVisualEditorialPalette.color(index,psychological:formatTitle?.lowercased().contains("психолог") == true)
-        guard colorScheme == .dark else {return Color(red:c.red,green:c.green,blue:c.blue)}
-        // Preserve each panel's hue in an opaque dark surface, with enough
-        // luminance separation for the shared bright secondary text.
-        return Color(red:0.16+(c.red-0.93)*1.35,
-                     green:0.21+(c.green-0.94)*1.35,
-                     blue:0.25+(c.blue-0.94)*1.35)
-    }
-    private func roleLabel(_ role:AIVisualRole)->String {
-        switch role {case .fact:return VL.text("Из записи");case .position:return VL.text("Позиция участника");case .interpretation:return VL.text("Интерпретация модели");case .hypothesis:return VL.text("Гипотеза · требует проверки")}
-    }
-    private func contextSymbol(_ block:AIVisualBlock)->String {icons[block.id] ?? ""}
-    @ViewBuilder private func itemIcon(_ item:AIVisualItem,block:AIVisualBlock)->some View {
-        if let index=block.items.firstIndex(of:item),let name=icons[block.id+":item:"+String(index)] {
-            Image(systemName:name).font(.system(size:13,weight:.regular)).foregroundColor(reportSecondary)
-        }
-    }
-    private func richText(_ value:String)->Text {
-        if let markdown=prepared?.markdown[value] {return Text(markdown)}
-        return Text(value)
-    }
-    private func symbol(_ type:AIVisualBlockType)->String {
-        switch type {case .hero:return "sparkles";case .keyPoints:return "list.bullet";case .timeline:return "clock";case .decisions:return "checkmark.circle";case .tasks:return "checklist";case .comparison:return "rectangle.split.2x1";case .risks:return "exclamationmark.triangle";case .openQuestions:return "questionmark.circle";case .quotes:return "quote.opening";case .statistics,.chart:return "chart.bar";case .processFlow:return "arrow.right";case .conceptMap:return "point.3.connected.trianglepath.dotted";case .decisionMatrix:return "tablecells";case .takeaway:return "checkmark.seal"}
-    }
-}
-private struct NativeVisualDiagram:NSViewRepresentable {
-    @Environment(\.colorScheme) private var colorScheme
-    let block:AIVisualBlock
-    let compact:Bool
-    func makeNSView(context:Context)->DiagramView {DiagramView()}
-    func updateNSView(_ view:DiagramView,context:Context){view.block=block;view.compact=compact;view.appearance=NSAppearance(named:colorScheme == .dark ? .darkAqua:.aqua);view.needsDisplay=true}
-    final class DiagramView:NSView {
-        var block:AIVisualBlock?
-        var compact=false
-        override var isFlipped:Bool {true}
-        override func draw(_ rect:NSRect) {guard let block,let ctx=NSGraphicsContext.current?.cgContext else{return};NativeVisualDiagramPainter.draw(block,in:bounds,context:ctx,printing:false,compact:compact)}
-    }
-}
-
-/// The proposal, not previously measured child geometry, owns row width.
-/// This prevents a wide report from imposing its old minimum on a smaller window.
-private struct NativeVisualRowLayout:Layout {
-    let row:[AIVisualBlock]
-    private var shares:[CGFloat] {row.map {CGFloat(AIVisualLayoutPlan.share($0,in:row))}}
-    private let gap:CGFloat=14
-    func sizeThatFits(proposal:ProposedViewSize,subviews:Subviews,cache:inout ()) -> CGSize {
-        let width=max(0,proposal.width ?? 700)
-        let usable=max(0,width-gap*CGFloat(max(0,subviews.count-1)))
-        let height=subviews.enumerated().map {index,view in
-            view.sizeThatFits(ProposedViewSize(width:max(1,usable*shares[index]),height:nil)).height
-        }.max() ?? 0
-        return CGSize(width:width,height:height)
-    }
-    func placeSubviews(in bounds:CGRect,proposal:ProposedViewSize,subviews:Subviews,cache:inout ()) {
-        let usable=max(0,bounds.width-gap*CGFloat(max(0,subviews.count-1)))
-        var x=bounds.minX
-        for (index,view) in subviews.enumerated() {
-            let width=max(1,usable*shares[index])
-            view.place(at:CGPoint(x:x,y:bounds.minY),anchor:.topLeading,proposal:ProposedViewSize(width:width,height:bounds.height))
-            x+=width+gap
+            } catch is CancellationError {} catch {if generation==token {failure=true}}
         }
     }
 }
-
 
 /// Development-only, synthetic gallery. Never reads or changes user recordings.
 struct NativeVisualComponentGallery:View {
@@ -560,7 +93,7 @@ struct NativeVisualComponentGallery:View {
         ScrollView {
             LazyVStack(alignment:.leading,spacing:24) {
                 Text(VL.text("Vecta · библиотека компонентов")).font(.title.bold())
-                Text(VL.text("Синтетические данные. Реальные варианты и fallback при узком окне.")).foregroundColor(Ink.secondary)
+                Text(VL.text("Синтетические данные. Фиксированный холст 1200 × 840.")).foregroundColor(Ink.secondary)
                 HStack {
                     VectaSelectionButton(title:family == "all" ? VL.text("Все семейства"):family,label:VL.text("Семейство компонентов")) {
                         Button(VL.text("Все семейства")) {family="all"}
@@ -570,10 +103,10 @@ struct NativeVisualComponentGallery:View {
                     Toggle(VL.text("Пустые данные"),isOn:$empty)
                     Button(VL.text("Экспорт образца PDF…")) {exportSample()}
                 }
-                Text(VL.text("15 семейств · \(AIVisualComponentRegistry.components.count) реальных вариантов")).font(.caption)
-                ForEach(AIVisualComponentRegistry.components.filter {family == "all" || $0.family==family}) {component in
-                    Text(component.id).font(.system(.caption,design:.monospaced))
-                    NativeVisualSummaryView(report:report(component.type),variantOverride:component.variant,speakers:.initial(segments),segments:segments,play:{_ in})
+                Text("1200 × 840").font(.caption)
+                ForEach(AIVisualBlockType.allCases.filter {family == "all" || $0.rawValue==family},id:\.self) {type in
+                    Text(type.rawValue).font(.system(.caption,design:.monospaced))
+                    NativeVisualSummaryView(report:report(type),speakers:.initial(segments),segments:segments,play:{_ in})
                 }
             }.padding(24)
         }.background(Ink.canvas).foregroundColor(Ink.text)

@@ -87,3 +87,20 @@ archives/headers/licenses, application object, transport/audio archives,
 non-system linker inputs, exact link/codec manifests and a working relink script.
 Its README explicitly permits modifications and reverse engineering for debugging
 LGPL-covered modifications. See [dependency obligations](DEPENDENCIES.md).
+
+## Optional stable local signing identity
+
+CI and builds without `VECTA_SIGNING_IDENTITY` remain ad-hoc signed. To use an
+existing, authorized code-signing identity consistently across local updates,
+set `VECTA_SIGNING_IDENTITY` to its certificate SHA-1 for the build command only.
+Do not export private keys or change Keychain trust/ACLs. For example:
+
+```sh
+VECTA_SIGNING_IDENTITY="<authorized-certificate-SHA1>" python3 -I Tools/build.py .build/local-release --version 0.1.0 --build 76
+```
+
+Apple Development signing provides a certificate-based identity but is not
+Developer ID distribution or notarization. The actual signature/team/designated
+requirement are recorded by the release verifier. A first change of identity may
+require a new OS grant; permission persistence and clean-user Gatekeeper remain
+separate acceptance checks.

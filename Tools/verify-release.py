@@ -38,6 +38,26 @@ def inventory(folder):
     return result
 
 
+def signing_information(binary):
+    display = subprocess.run(['codesign', '-d', '--verbose=4', str(binary)], capture_output=True, text=True, check=True)
+    details = display.stdout + display.stderr
+    authorities = [line.removeprefix('Authority=') for line in details.splitlines() if line.startswith('Authority=')]
+    if 'Signature=adhoc' in details:
+        kind = 'ad-hoc'
+    elif any(name.startswith('Developer ID Application:') for name in authorities):
+        kind = 'developer-id-application'
+    elif any(name.startswith(('Apple Development:', 'Mac Developer:')) for name in authorities):
+        kind = 'apple-development'
+    else:
+        kind = 'certificate-signed'
+    team = next((line.removeprefix('TeamIdentifier=') for line in details.splitlines() if line.startswith('TeamIdentifier=')), None)
+    requirement = subprocess.run(['codesign', '-d', '-r-', str(binary)], capture_output=True, text=True, check=True)
+    text = requirement.stdout + requirement.stderr
+    designated = next((line.split('=>', 1)[1].strip() for line in text.splitlines() if 'designated =>' in line), None)
+    require(designated, 'Missing designated code-signing requirement')
+    return {'signature': kind, 'teamIdentifier': None if team == 'not set' else team, 'designatedRequirement': designated}
+
+
 def verify_manifest(folder, filename):
     values = json.loads((folder/filename).read_text())
     files = {name: value for name, value in values.items() if name != 'toolchain'}
@@ -101,7 +121,7 @@ def verify(build):
         subprocess.run(['plutil', '-lint', str(resources/(language+'.lproj/InfoPlist.strings'))], check=True)
     executable = app/'Contents/MacOS/Vecta'
     data = executable.read_bytes()
-    for flag in (b'--verify-summary-options', b'--verify-reset-policy', b'--verify-library-ownership', b'--verify-performance-state', b'--verify-fast-transfer-availability', b'--verify-fast-transfer-ui', b'--verify-performance-refresh', b'--verify-saved-detail-preparation', b'--verify-language-restart-policy', b'--verify-welcome', b'--verify-speaker-merge', b'--verify-speaker-ui', b'--verify-public-demo'):
+    for flag in (b'--verify-application-lifecycle', b'--verify-summary-options', b'--verify-reset-policy', b'--verify-library-ownership', b'--verify-performance-state', b'--verify-fast-transfer-availability', b'--verify-fast-transfer-ui', b'--verify-performance-refresh', b'--verify-saved-detail-preparation', b'--verify-language-restart-policy', b'--verify-welcome', b'--verify-speaker-merge', b'--verify-speaker-ui', b'--verify-public-demo', b'--verify-recording-card', b'--verify-playback-keyboard', b'--verify-library-search', b'--verify-model-download-host'):
         require(flag not in data, 'Development harness remains')
     worker_paths = [workers/name for name in ('VectaSpeech', 'VectaMLX')]
     for binary in [executable, *worker_paths, *(workers/'SwiftRuntime').glob('*.dylib')]:
@@ -129,7 +149,8 @@ def verify(build):
     relinked = build/('relinked-Vecta-'+uuid.uuid4().hex)
     subprocess.run(['bash', str(build/'relink-kit/relink.sh'), str(build/'relink-kit/codec-libs/libmp3lame.a'), str(relinked)], check=True)
     subprocess.run(['codesign', '--verify', '--strict', str(relinked)], check=True)
-    summary = {'version': metadata['CFBundleShortVersionString'], 'build': metadata['CFBundleVersion'], 'nondevelopment': True, 'sourceMatches': True, 'linkMatches': True, 'hashCounts': counts, 'localizedResources': localized, 'binaryPrivacyRuntime': 'PASS', 'workerMissingInputExit': exits, 'actualRelink': 'PASS', 'physicalHardware': 'NOT TESTED', 'realModelInference': 'NOT TESTED', 'cleanUserInstallation': 'NOT TESTED', 'developerID': False, 'notarized': False, 'installed': False}
+    signing = signing_information(executable)
+    summary = {'version': metadata['CFBundleShortVersionString'], 'build': metadata['CFBundleVersion'], 'nondevelopment': True, 'sourceMatches': True, 'linkMatches': True, 'hashCounts': counts, 'localizedResources': localized, 'binaryPrivacyRuntime': 'PASS', 'workerMissingInputExit': exits, 'actualRelink': 'PASS', 'physicalHardware': 'NOT TESTED', 'realModelInference': 'NOT TESTED', 'cleanUserInstallation': 'NOT TESTED', 'developerID': signing['signature'] == 'developer-id-application', 'signing': signing, 'notarized': False, 'installed': False}
     (build/'verification-summary.json').write_text(json.dumps(summary, indent=2)+'\n')
     print(json.dumps(summary, sort_keys=True))
     return summary

@@ -263,6 +263,12 @@ enum AIRecognitionBudget {
     }
 }
 
+struct AIConferenceProcessingOptions: Codable, Equatable {
+    var diarization = true
+    var recognizeKnownVoices = false
+    var summary = true
+}
+
 struct AIProcessingRequest: Codable, Equatable {
     let version: Int
     let id: UUID
@@ -279,6 +285,9 @@ struct AIProcessingRequest: Codable, Equatable {
     var visualEnabled:Bool? = nil
     var visualSummaryModel:AISummaryModelID? = nil
     var outputLanguage:String? = nil
+    var conference: AIConferenceProcessingOptions? = nil
+    var wantsDiarization: Bool { conference?.diarization ?? true }
+    var wantsSummary: Bool { conference?.summary ?? true }
     var resultLanguage:VectaLanguage {outputLanguage.flatMap(VectaLanguage.init(rawValue:)) ?? .russian}
     var speechCheckpointVersion:Int {outputLanguage == nil ? 1:2}
     var speechDecodingPolicy:String {outputLanguage == nil ? "forced-ru-v1":"automatic-v1"}
@@ -291,7 +300,7 @@ struct AIProcessingRequest: Codable, Equatable {
         return output.deletingLastPathComponent().appendingPathComponent(name+".json")
     }
     var selectedVisualModel:AISummaryModelID { visualSummaryModel ?? .qwen9b }
-    var wantsVisual:Bool { visualEnabled ?? (selectedSummaryModel == .qwen9b) }
+    var wantsVisual:Bool { wantsSummary && (visualEnabled ?? (selectedSummaryModel == .qwen9b)) }
     var selectedSummaryModel: AISummaryModelID { summaryModel ?? .qwen }
     func validate() throws {
         if let outputLanguage, VectaLanguage(rawValue:outputLanguage)==nil {throw AIProcessingError.invalidRequest}
@@ -383,7 +392,7 @@ struct AIProcessingResult: Codable, Equatable {
         }
         if let visualSummary {try visualSummary.validate(segments:segments,speakerIDs:summarySpeakerIDs.map(Set.init))}
         if stage == .completed {
-            guard transcript != nil, summary != nil, error == nil else { throw AIProcessingError.invalidSummary }
+            guard transcript != nil, (!request.wantsSummary || summary != nil), error == nil else { throw AIProcessingError.invalidSummary }
         }
         if stage == .summaryFailed && transcript == nil { throw AIProcessingError.invalidTranscript }
     }
@@ -909,7 +918,7 @@ struct AIVoiceLibrary: Codable, Equatable {
         for (id,var identity) in value.identities {
             if identity.nameOverride != true,let profile=identity.profileID,
                let person=profiles.first(where:{$0.id==canonical(profile)}) {identity.name=person.name}
-            else if recognitionEnabled,identity.profileID==nil,["automatic","voiceSuggestion"].contains(identity.origin),let alignment,
+            else if (result.request.conference?.recognizeKnownVoices ?? recognitionEnabled),identity.profileID==nil,["automatic","voiceSuggestion"].contains(identity.origin),let alignment,
                     let sample=alignment.sample(id,result:result,conversation:recording,key:key),
                     let person=probable(sample,rejected:Set(recording.dismissedSuggestions?[id] ?? [])) {
                 identity.referenceNames=Array(Set((identity.referenceNames ?? [])+[identity.name,"Возможно, "+person.name])).sorted()
@@ -1372,15 +1381,17 @@ struct AIAutomaticSettings:Codable,Equatable {
     var model:AISummaryModelID = .qwen4b
     var visual:Bool = true
     var summaryRecipeID:String = "format:analytical"
+    var conference: AIConferenceProcessingOptions? = nil
     init(model:AISummaryModelID = .qwen4b,visual:Bool = true,summaryRecipeID:String = "format:analytical") {
         self.model=model;self.visual=visual;self.summaryRecipeID=summaryRecipeID
     }
-    private enum CodingKeys:String,CodingKey {case model,visual,summaryRecipeID}
+    private enum CodingKeys:String,CodingKey {case model,visual,summaryRecipeID,conference}
     init(from decoder:Decoder)throws {
         let values=try decoder.container(keyedBy:CodingKeys.self)
         model=try values.decodeIfPresent(AISummaryModelID.self,forKey:.model) ?? .qwen4b
         visual=try values.decodeIfPresent(Bool.self,forKey:.visual) ?? true
         summaryRecipeID=try values.decodeIfPresent(String.self,forKey:.summaryRecipeID) ?? "format:analytical"
+        conference=try values.decodeIfPresent(AIConferenceProcessingOptions.self,forKey:.conference)
     }
     func validate()throws {guard AISummaryModelID.allCases.contains(model) else {throw AIProcessingError.invalidRequest}}
 }
@@ -1506,7 +1517,9 @@ struct AIProgressPlan {
     let weights:[Double]
     let calibrated:Bool
     init(result:AIProcessingResult,visualOnly:Bool=false,history:[AIStageMeasurement]=[],memoryGB:Int=Int(ProcessInfo.processInfo.physicalMemory/1_073_741_824)) {
-        stages=visualOnly ? [.visualizing,.saving]:result.request.summaryOnly ? [.loadingSummary,.summarizing]+(result.request.wantsVisual ? [.visualizing]:[])+[.saving]:[.preparingAudio,.loadingRecognition,.recognizing,.diarizing,.aligning,.savingTranscript,.loadingSummary,.summarizing]+(result.request.wantsVisual ? [.visualizing]:[])+[.saving]
+        let speech: [AIProcessingStage] = [.preparingAudio, .loadingRecognition, .recognizing] + (result.request.wantsDiarization ? [.diarizing, .aligning] : []) + [.savingTranscript]
+        let summary: [AIProcessingStage] = result.request.wantsSummary ? [.loadingSummary, .summarizing] : []
+        stages = visualOnly ? [.visualizing, .saving] : (result.request.summaryOnly ? [] : speech) + summary + (result.request.wantsVisual ? [.visualizing] : []) + [.saving]
         let duration=max(1,result.duration ?? 60),characters=max(200,result.segments.isEmpty ? Int(duration*15):result.segments.reduce(0){$0+$1.text.count})
         var values=[Double](),known=true
         for stage in stages {
@@ -1577,17 +1590,17 @@ enum AIVisualEditorial {
         for block in report.blocks {
             let items = block.items.filter { item in
                 let text = key(item.tokens.map { $0.text ?? $0.speakerID ?? "" }.joined())
-                return !text.isEmpty && !metadata.contains(text)
+                return (!text.isEmpty && !metadata.contains(text)) || item.value?.isEmpty == false || item.number != nil
             }
             guard !items.isEmpty else { continue }
-            let heading = key(block.title) + "|" + (block.role?.rawValue ?? "fact")
-            let graph = block.edges != nil || [.chart, .processFlow, .conceptMap].contains(block.type)
+            let heading = block.type.rawValue + "|" + key(block.title) + "|" + (block.role?.rawValue ?? "fact")
+            let graph = block.edges != nil || [.chart, .processFlow, .conceptMap, .comparison, .decisionMatrix].contains(block.type)
             if !graph, let index = positions[heading], output[index].type != .statistics, block.type != .statistics, output[index].items.count + items.count <= 12 {
                 let previous = output[index]
                 var unique = previous.items
                 for item in items where !unique.contains(where: {
                     key($0.tokens.map { $0.text ?? $0.speakerID ?? "" }.joined()) == key(item.tokens.map { $0.text ?? $0.speakerID ?? "" }.joined()) &&
-                    $0.value == item.value && $0.speakerID == item.speakerID && $0.date == item.date && $0.deadline == item.deadline
+                    $0.value == item.value && $0.number == item.number && $0.unit == item.unit && $0.speakerID == item.speakerID && $0.date == item.date && $0.deadline == item.deadline
                 }) { unique.append(item) }
                 output[index] = AIVisualBlock(id: previous.id, type: previous.type, title: previous.title, items: unique,
                     layout: previous.layout, role: previous.role, chartKind: previous.chartKind, edges: previous.edges)
@@ -1671,8 +1684,11 @@ struct AIFullTextSummary:Codable,Equatable {
         if !summary.uncertainties.isEmpty {add("uncertainties",VL.text("Открытые вопросы"),summary.uncertainties.map {"• "+$0}.joined(separator:"\n"))}
         return Self(schemaVersion:1,paragraphs:parts)
     }
-    func rendered(speakers:AIRecordingSpeakers)->String {
-        paragraphs.map {part in [part.heading.map(speakers.resolveText),speakers.render(part.tokens)].compactMap {$0}.filter {!$0.isEmpty}.joined(separator:"\n")}.joined(separator:"\n\n")
+    func rendered(speakers:AIRecordingSpeakers,markdownHeadings:Bool=false)->String {
+        paragraphs.map {part in
+            let heading=part.heading.map(speakers.resolveText).map {markdownHeadings ? "## "+$0:$0}
+            return [heading,speakers.render(part.tokens)].compactMap {$0}.filter {!$0.isEmpty}.joined(separator:markdownHeadings ? "\n\n":"\n")
+        }.joined(separator:"\n\n")
     }
 }
 extension AIProcessingResult {
@@ -2241,22 +2257,22 @@ struct AITextDocument {
 /// ornament instead of repeating it or hiding any content.
 enum AIVisualIconCatalog {
     static let families: [(String, [String])] = [
-        ("голос речь аудио запись звук", ["waveform", "mic", "ear", "headphones", "speaker.wave.2", "waveform.path", "record.circle", "music.mic"]),
-        ("модель интеллект анализ мысль психология", ["brain", "brain.head.profile", "lightbulb", "sparkle", "cpu", "head.profile", "eye", "wand.and.stars"]),
-        ("задач решен действ план договор удал откат пропуск добав", ["checklist", "checkmark.seal", "checkmark.circle", "flag", "target", "calendar.badge.clock", "arrow.right.circle", "bolt"]),
-        ("риск проблем огранич ловушк противореч", ["exclamationmark.triangle", "shield", "hand.raised", "exclamationmark.circle", "lock", "stop.circle", "bell", "shield.lefthalf.filled"]),
-        ("цена ценовой стоим деньг оплат бюджет рынок", ["banknote", "creditcard", "rublesign.circle", "dollarsign.circle", "cart", "bag", "chart.line.uptrend.xyaxis", "building.columns"]),
-        ("опрос вопрос выбор вариант ответ", ["questionmark.bubble", "questionmark.circle", "bubble.left", "text.bubble", "checkmark.bubble", "arrow.triangle.branch", "slider.horizontal.3", "rectangle.and.pencil.and.ellipsis"]),
-        ("данн память файл сервис облак", ["externaldrive", "tray.full", "doc", "folder", "cloud", "server.rack", "archivebox", "internaldrive"]),
-        ("структур сегмент организац групп команда", ["square.grid.2x2", "rectangle.3.group", "person.2", "person.3", "building.2", "network", "square.stack.3d.up", "square.split.2x2"]),
-        ("диплом образован обучен знан экзамен", ["graduationcap", "book", "books.vertical", "pencil", "studentdesk", "bookmark", "doc.text", "character.book.closed"]),
-        ("время срок скорост этап процесс", ["clock", "timer", "hourglass", "calendar", "stopwatch", "arrow.triangle.2.circlepath", "speedometer", "gauge"]),
-        ("город среда метафор путь направлен", ["mappin.and.ellipse", "map", "location", "signpost.right", "globe", "leaf", "sun.max", "mountain.2"]),
-        ("границ ценност уверен эмоц сотруд", ["heart", "hands.sparkles", "person.crop.circle", "face.smiling", "hand.thumbsup", "figure.stand", "arrow.up.right", "scope"]),
-        ("итог вывод суть тезис идея", ["lightbulb.max", "quote.opening", "seal", "star", "rosette", "text.alignleft", "list.bullet", "text.justify"]),
-        ("сравнен числ метрик статист баланс", ["chart.bar", "chart.pie", "chart.xyaxis.line", "equal.circle", "rectangle.split.2x1", "tablecells", "percent", "plus.forwardslash.minus"]),
-        ("устрой аппарат техник продукт", ["watch.analog", "iphone", "desktopcomputer", "laptopcomputer", "battery.100", "wifi", "antenna.radiowaves.left.and.right", "gearshape"]),
-        ("обмен связь экспорт помощь инструмент", ["paperplane", "link", "square.and.arrow.up", "wrench.and.screwdriver", "magnifyingglass", "envelope", "paperclip", "shippingbox"])
+        ("голос речь аудио запись звук audio voice speech recording sound", ["waveform", "mic", "ear", "headphones", "speaker.wave.2", "waveform.path", "record.circle", "music.mic"]),
+        ("модель интеллект анализ мысль психология model intelligence analysis thought psychology", ["brain", "brain.head.profile", "lightbulb", "sparkle", "cpu", "head.profile", "eye", "wand.and.stars"]),
+        ("задач решен действ план договор удал откат пропуск добав task decision action plan agreement", ["checklist", "checkmark.seal", "checkmark.circle", "flag", "target", "calendar.badge.clock", "arrow.right.circle", "bolt"]),
+        ("риск проблем огранич ловушк противореч risk problem limitation contradiction", ["exclamationmark.triangle", "shield", "hand.raised", "exclamationmark.circle", "lock", "stop.circle", "bell", "shield.lefthalf.filled"]),
+        ("цена ценовой стоим деньг оплат бюджет рынок price cost money payment budget market", ["banknote", "creditcard", "rublesign.circle", "dollarsign.circle", "cart", "bag", "chart.line.uptrend.xyaxis", "building.columns"]),
+        ("опрос вопрос выбор вариант ответ survey question choice option answer", ["questionmark.bubble", "questionmark.circle", "bubble.left", "text.bubble", "checkmark.bubble", "arrow.triangle.branch", "slider.horizontal.3", "rectangle.and.pencil.and.ellipsis"]),
+        ("данн память файл сервис облак data memory file service storage", ["externaldrive", "tray.full", "doc", "folder", "cloud", "server.rack", "archivebox", "internaldrive"]),
+        ("структур сегмент организац групп команда structure segment organization group team", ["square.grid.2x2", "rectangle.3.group", "person.2", "person.3", "building.2", "network", "square.stack.3d.up", "square.split.2x2"]),
+        ("диплом образован обучен знан экзамен education training knowledge exam", ["graduationcap", "book", "books.vertical", "pencil", "studentdesk", "bookmark", "doc.text", "character.book.closed"]),
+        ("время срок скорост этап процесс time deadline speed stage process", ["clock", "timer", "hourglass", "calendar", "stopwatch", "arrow.triangle.2.circlepath", "speedometer", "gauge"]),
+        ("город среда метафор путь направлен city environment metaphor path direction", ["mappin.and.ellipse", "map", "location", "signpost.right", "globe", "leaf", "sun.max", "mountain.2"]),
+        ("границ ценност уверен эмоц сотруд boundary value confidence emotion", ["heart", "hands.sparkles", "person.crop.circle", "face.smiling", "hand.thumbsup", "figure.stand", "arrow.up.right", "scope"]),
+        ("итог вывод суть тезис идея conclusion takeaway insight idea", ["lightbulb.max", "quote.opening", "seal", "star", "rosette", "text.alignleft", "list.bullet", "text.justify"]),
+        ("сравнен числ метрик статист баланс comparison number metric statistics balance", ["chart.bar", "chart.pie", "chart.xyaxis.line", "equal.circle", "rectangle.split.2x1", "tablecells", "percent", "plus.forwardslash.minus"]),
+        ("устрой аппарат техник продукт device hardware technology product", ["watch.analog", "iphone", "desktopcomputer", "laptopcomputer", "battery.100", "wifi", "antenna.radiowaves.left.and.right", "gearshape"]),
+        ("обмен связь экспорт помощь инструмент exchange connection export help tool", ["paperplane", "link", "square.and.arrow.up", "wrench.and.screwdriver", "magnifyingglass", "envelope", "paperclip", "shippingbox"])
     ]
     static let symbols: [String] = families.flatMap { $0.1 }
     static func preferred(_ text: String) -> [String] {
@@ -2267,13 +2283,23 @@ enum AIVisualIconCatalog {
     }
     static func allocate(_ report: AIVisualSummary, supported: Set<String>) -> [String: String] {
         var used = Set<String>(), result = [String: String]()
-        func assign(_ key: String, _ text: String, _ permitsCheckmark: Bool) {
-            guard let symbol = preferred(text).first(where: { supported.contains($0) && !used.contains($0) && (permitsCheckmark || !$0.hasPrefix("checkmark")) }) else { return }
+        func assign(_ key: String, _ text: String, _ permitsCheckmark: Bool, _ type:AIVisualBlockType) {
+            // A warning must not borrow an action/checklist icon just because it says “delete”.
+            let semantic:[String]
+            switch type {
+            case .risks:semantic=families[3].1
+            case .quotes:semantic=["quote.opening","text.bubble","bubble.left"]
+            case .comparison,.decisionMatrix,.statistics,.chart:semantic=families[13].1
+            case .timeline,.processFlow:semantic=families[9].1
+            case .decisions,.tasks:semantic=families[2].1
+            default:semantic=[]
+            }
+            guard let symbol = (semantic+preferred(text)).first(where: { supported.contains($0) && !used.contains($0) && (permitsCheckmark || !$0.hasPrefix("checkmark")) }) else { return }
             result[key] = symbol; used.insert(symbol)
         }
-        for block in report.blocks { assign(block.id, block.title, block.type == .decisions && (block.role ?? .fact) == .fact) }
+        for block in report.blocks { assign(block.id, block.title, block.type == .decisions && (block.role ?? .fact) == .fact, block.type) }
         for block in report.blocks {
-            for (index, item) in block.items.enumerated() { assign(block.id + ":item:" + String(index), item.title + " " + item.tokens.compactMap(\.text).joined(), block.type == .decisions && (block.role ?? .fact) == .fact) }
+            for (index, item) in block.items.enumerated() { assign(block.id + ":item:" + String(index), item.title + " " + item.tokens.compactMap(\.text).joined(), block.type == .decisions && (block.role ?? .fact) == .fact, block.type) }
         }
         return result
     }

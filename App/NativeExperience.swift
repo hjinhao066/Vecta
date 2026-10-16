@@ -6,7 +6,7 @@ import AVFoundation
 import NotePinTransport
 #endif
 
-enum NativeDestination: String { case library, device, ai, formats, settings,tasks }
+enum NativeDestination: String { case library, device, ai, formats, settings,tasks,conferences }
 
 /// Heavy alignment reads are serialized off-main; journal recovery stays with UI edits.
 actor NativeConversationRefresh {
@@ -81,6 +81,13 @@ actor NativeConversationRefresh {
 
 @MainActor extension NativeMacModel {
     var formats: [VectaSummaryInterpretation] { NativeSummaryCatalog.visible(library?.formats ?? []) }
+    func automaticRecipeSnapshot(settings: AIAutomaticSettings) throws -> NativeAnalysisQueue.RecipeSnapshot {
+        loadWorkspace()
+        guard let root = (processingRoot ?? localAI?.root)?.standardizedFileURL, workspaceStateRoot == root else {
+            throw AIProcessingError.invalidRequest
+        }
+        return try .selected(recipeID: settings.summaryRecipeID, formats: formats, templates: workspace.templates)
+    }
     var rawAnalysis: AIProcessingResult? { if let analysisID { return analyses.first { $0.request.id == analysisID } }; return analyses.first }
     var resolvedConversation:AIRecordingSpeakers {presentation().0}
     var analysis:AIProcessingResult? {var value=presentation().1;if let id=value?.request.id,let draft=localAI?.summaryDrafts[id] {value?.summaryDraft=draft};return value}
@@ -293,7 +300,7 @@ actor NativeConversationRefresh {
         if let start,let end {playExcerpt(start:start,end:end,segment:nil)}
     }
     var analysisBusy: Bool { requestingAnalysis || (pendingAnalysis.map { id in analyses.contains { $0.request.id == id } } ?? false) || analyses.contains { $0.stage.isActive } }
-    var busy: Bool { resettingDevice || transferring || connecting || syncing || fastTransferPhase != nil }
+    var busy: Bool { purgingRecording != nil || resettingDevice || transferring || connecting || syncing || fastTransferPhase != nil }
 
     func updateTransferProgress() { transferProgress = transferMetrics?.snapshot(at: ProcessInfo.processInfo.systemUptime) }
     func clearTransferProgress() { transferTimer?.invalidate(); transferTimer = nil; transferMetrics = nil; transferProgress = nil }
@@ -338,18 +345,26 @@ actor NativeConversationRefresh {
         }
     }
 
-    func analyze(format: VectaSummaryInterpretation, reuseTranscript: Bool = true,template:AISummaryTemplate? = nil) {
-        guard let id = selected, let library, let host = localAI, !analysisBusy else { return }
+    func analyze(format: VectaSummaryInterpretation, reuseTranscript: Bool = true,template:AISummaryTemplate? = nil, installMissingModels: Bool = false) {
+        guard purgingRecording == nil, let id = selected, let library, let host = localAI, !analysisBusy else { return }
+        guard host.supported, host.summaryModel.compatible() else {
+            analysisMessage = host.supported ? host.summaryModel.memoryRequirement : VL.text("Локальная обработка доступна с macOS 15."); return
+        }
         let source = reuseTranscript ? NativeSummarySelection.transcriptSource(analyses) : nil
-        guard host.supported, host.statuses[host.summaryModel.rawValue]?.state == .installed,
-              source != nil || ["whisper", "speaker", "tokenizer"].allSatisfy({ host.statuses[$0]?.state == .installed }) else {
+        let needed = host.modelsNeeded(reuseTranscript: source != nil)
+        let missing = needed.filter { host.statuses[$0]?.state != .installed && !host.isModelBusy($0) }
+        guard missing.isEmpty || installMissingModels else {
             analysisMessage = VL.text("Установите необходимые модели в настройках локального ИИ."); destination = .ai; return
         }
+        // Only the explicit download-and-process confirmation authorizes new
+        // downloads. Existing downloads do not discard this processing request.
+        if installMissingModels { for id in missing { host.install(id) } }
         // One preference controls both new manual and automatic jobs. Freeze it
         // together with the shared model before submitting this request.
         let settings = AIAutomaticSettings(model: host.summaryModel, visual: host.automaticSettings.visual)
         let scope = NativeLibraryOperationScope(library: library, host: host, generation: libraryGeneration)
-        requestingAnalysis = true; analysisMessage = nil
+        requestingAnalysis = true
+        analysisMessage = needed.contains(where: host.isModelBusy) ? VL.text("Запрос сохранён. Обработка начнётся после установки необходимых моделей.") : nil
         Task {
             defer { if ownsLibraryOperation(scope, checkCancellation: false) { requestingAnalysis = false } }
             do {
@@ -513,9 +528,16 @@ actor NativeConversationRefresh {
         #endif
         let audio=root.appendingPathComponent("synthetic.wav")
         let format=AVAudioFormat(standardFormatWithSampleRate:16000,channels:1)!
-        let buffer=AVAudioPCMBuffer(pcmFormat:format,frameCapacity:192000)!
-        buffer.frameLength=192000
-        buffer.floatChannelData![0].initialize(repeating:0,count:192000)
+        let frames: AVAudioFrameCount = CommandLine.arguments.contains("--verify-highlight-ui") || CommandLine.arguments.contains("--verify-highlights") ? 960000 : 192000
+        let buffer=AVAudioPCMBuffer(pcmFormat:format,frameCapacity:frames)!
+        buffer.frameLength=frames
+        buffer.floatChannelData![0].initialize(repeating:0,count:Int(frames))
+        if CommandLine.arguments.contains("--verify-highlight-ui") {
+            for index in 0..<Int(frames) {
+                let time = Double(index) / 16000
+                buffer.floatChannelData![0][index] = Float(sin(time * 2 * .pi * 220) * (0.15 + 0.65 * abs(sin(time * 2))))
+            }
+        }
         do { let file=try AVAudioFile(forWriting:audio,settings:format.settings);try file.write(from:buffer) }
         let identity=NativeRecordingIdentity(serialNumber:"SYNTHETIC",sessionID:1)
         verificationItem=NativeLibraryItem(identity:identity,local:nil,remote:NativeRemoteRecording(identity:identity,duration:12,byteSize:0),audioURL:audio)

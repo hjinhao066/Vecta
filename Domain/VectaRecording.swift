@@ -100,12 +100,16 @@ struct VectaRecording: Codable, Equatable {
     var updatedAt: Date
     var generatedTitle: String? = nil
     var importedTitle: String? = nil
+    var highlightSeconds: [Double]? = nil
+    var recorderHighlightSeconds: [Double]? = nil
+    /// Lossless SDK getMarking values; independent from local second-based annotations.
+    var deviceMarkings: [UInt32]? = nil
 
     private enum CodingKeys: String, CodingKey {
         case sessionID = "sessionId"
         case deviceSerialNumber, createdAt, duration, localFileName, status, statusDetail, transcript
         case transcriptionID = "transcriptionId"
-        case cloudCheckpoint, updatedAt, generatedTitle, importedTitle
+        case cloudCheckpoint, updatedAt, generatedTitle, importedTitle, highlightSeconds, recorderHighlightSeconds, deviceMarkings
     }
 
     var title: String {
@@ -119,3 +123,32 @@ struct VectaRecording: Codable, Equatable {
     }
 }
 
+
+/// Display-only windows; neither audio nor historical transcription is changed.
+struct VectaHighlightRange: Equatable {
+    let start: Double
+    let end: Double
+    func overlaps(start: Double, end: Double) -> Bool {
+        guard start.isFinite, end.isFinite, start >= 0, end >= start else { return false }
+        return end == start ? start >= self.start && start < self.end : start < self.end && end > self.start
+    }
+}
+
+enum VectaHighlights {
+    static func ranges(points: [Double], duration: Double) -> [VectaHighlightRange] {
+        guard duration.isFinite, duration > 0 else { return [] }
+        let windows = points.filter { $0.isFinite && $0 >= 0 && $0 <= duration }.sorted().map {
+            VectaHighlightRange(start: max(0, $0 - 10), end: min(duration, $0 + 10))
+        }
+        var merged: [VectaHighlightRange] = []
+        for window in windows {
+            if let last = merged.last, window.start <= last.end {
+                merged[merged.count - 1] = VectaHighlightRange(start: last.start, end: max(last.end, window.end))
+            } else { merged.append(window) }
+        }
+        return merged
+    }
+    static func contains(_ time: Double, ranges: [VectaHighlightRange]) -> Bool {
+        ranges.contains { $0.overlaps(start: time, end: time) }
+    }
+}

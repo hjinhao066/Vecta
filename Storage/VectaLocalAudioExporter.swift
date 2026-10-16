@@ -74,6 +74,23 @@ final class VectaLocalAudioExporter {
         }
     }
 
+    /// Explicit permanent deletion scoped to this exporter's authorized folder.
+    func permanentlyDelete(recording: VectaRecording, completion: @escaping (Result<Void, Error>) -> Void) {
+        queue.async { [self] in
+            let result: Result<Void, Error> = Result {
+                do {
+                    try withFolder { root in
+                        try NativeRecordingPurge.processingFiles(root: root, filenames: Set(Self.filenames(for: recording)))
+                    }
+                    audioFingerprints.removeAll(); requestManifests.removeAll()
+                } catch VectaLocalAudioExportError.folderNotConfigured {
+                    // No authorized processing folder means no Vecta export exists.
+                }
+            }
+            DispatchQueue.main.async { completion(result) }
+        }
+    }
+
     func results(
         recording: VectaRecording,
         completion: @escaping (Result<[VectaSavedAnalysisResult], Error>) -> Void
@@ -132,6 +149,7 @@ final class VectaLocalAudioExporter {
                         audioFilename: copy.lastPathComponent, audioSHA256: try cachedAudioDigest(copy), provider: .local,
                         format: interpretation, createdAt: Date(), summaryOnly: transcriptRequestID != nil, transcriptRequestID: transcriptRequestID, summaryModel: try (automaticSettings?.model ?? store.summaryModel()))
                     request.outputLanguage=VL.language.rawValue
+                    request.conference=automaticSettings?.conference
                     request.summaryTemplate=summaryTemplate
                     request.visualEnabled=try (visualEnabled ?? automaticSettings?.visual ?? store.automaticAISettings().visual)
                     request.visualSummaryModel=request.selectedSummaryModel

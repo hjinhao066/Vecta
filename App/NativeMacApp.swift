@@ -11,6 +11,7 @@ import NotePinTransport
 /// Existing account migration reads identity only; access tokens come from the
 /// lifecycle-owned local service and never from a bundled research credential.
 @MainActor final class NativeMacModel: ObservableObject {
+    let applicationSettings = NativeApplicationSettings()
     @Published var status = VL.text("Открываем существующую библиотеку…")
     @Published var library: NativeLibraryController?
     @Published var selected: NativeRecordingIdentity?
@@ -37,6 +38,13 @@ import NotePinTransport
     @Published var sidebarToggleSignal=UUID()
     @Published var exportRequested=false
     @Published var importingAudio=false
+    let macRecorder = NativeMacRecorder()
+    let macRecordingPreferences = NativeMacRecordingPreferences(defaults: VL.preferences)
+    var conferenceMonitor: NativeConferenceMonitor?
+    var conferenceQuietSince: [NativeRecordingIdentity: Date] = [:]
+    private var macRecordingActivity: AnyCancellable?
+    @Published var purgingRecording: NativeRecordingIdentity?
+    var permanentDeletionTask: Task<Void, Never>?
     var importTask: Task<Void,Never>?
     @Published var connected = false
     @Published var transferring = false
@@ -132,6 +140,28 @@ import NotePinTransport
         }.value
         guard !Task.isCancelled,presentationGeneration==generation else{return}
         cachedPresentation=(generation,prepared.0,prepared.1)
+    }
+    var highlightPoints: [Double] {
+        Array(Set((selection?.local?.highlightSeconds ?? []) + (selection?.local?.recorderHighlightSeconds ?? []))).sorted()
+    }
+    var highlightRanges: [VectaHighlightRange] {
+        VectaHighlights.ranges(points: highlightPoints, duration: max(duration, selection?.duration ?? 0))
+    }
+    func addHighlight() {
+        guard let id = selected, selection?.audioURL != nil, progress.isFinite, progress >= 0 else { return }
+        let point = min(progress, duration)
+        guard !highlightPoints.contains(where: { abs($0 - point) < 0.01 }) else { return }
+        saveHighlights((selection?.local?.highlightSeconds ?? []) + [point], for: id)
+    }
+    func removeHighlight(_ point: Double) {
+        guard let id = selected else { return }
+        saveHighlights((selection?.local?.highlightSeconds ?? []).filter { $0 != point }, for: id)
+    }
+    private func saveHighlights(_ points: [Double], for id: NativeRecordingIdentity) {
+        guard library?.recordingStore.saveHighlights(sessionID: id.sessionID, serialNumber: id.serialNumber, seconds: points) == true else {
+            status = VL.text("Не удалось сохранить Highlight. Исходная запись не изменена."); return
+        }
+        library?.reloadLibrary(); objectWillChange.send()
     }
     func words(for segment:AISpeechSegment)->[AIWordTiming] {
         if cachedWordsGeneration != presentationGeneration {sortedWords=wordTimings.sorted{$0.start<$1.start};cachedWordsGeneration=presentationGeneration}
@@ -322,7 +352,11 @@ import NotePinTransport
         summarizeAllAfterSync = false; downloadedForAnalysis = []
         do {
             if analysisQueue?.jobs.isEmpty == true { batchFailures = 0 }
-            try analysisQueue?.append(targets,settings:localAI?.automaticSettings)
+            if let queue = analysisQueue, !targets.isEmpty {
+                let settings = localAI?.automaticSettings ?? AIAutomaticSettings()
+                let recipe = try automaticRecipeSnapshot(settings: settings)
+                try queue.append(targets, settings: settings, recipeSnapshot: recipe)
+            }
             batchCount = analysisQueue?.jobs.count ?? 0
             if batchCount > 0 { batchMessage = VL.text("В очереди обработки: \(batchCount)") }
         } catch { batchMessage = VL.text("Не удалось сохранить очередь обработки: ") + error.localizedDescription }
@@ -395,6 +429,9 @@ import NotePinTransport
     init() {
         autoSyncInterval = autoSchedule.interval
         nextAutoSync = autoSchedule.nextAttempt
+        macRecordingActivity = macRecorder.$phase.removeDuplicates().dropFirst().sink { [weak self] _ in
+            DispatchQueue.main.async { self?.objectWillChange.send() }
+        }
     }
 
     var librarySourceNavigation=false
@@ -524,7 +561,7 @@ import NotePinTransport
     }
 
     func chooseAudioImport() {
-        guard library != nil, !importingAudio else { return }
+        guard library != nil, !importingAudio, purgingRecording == nil else { return }
         let panel = NSOpenPanel()
         panel.title = VL.text("Импорт аудиозаписи")
         panel.allowedContentTypes = [.mp3, .mpeg4Audio, .wav, .aiff, .audio]+[UTType(filenameExtension:"ogg"),UTType(filenameExtension:"opus")].compactMap{$0}
@@ -547,6 +584,7 @@ import NotePinTransport
     }
 
     func selectExistingLibrary() {
+        guard !macRecorder.busy, purgingRecording == nil else { return }
         let panel = NSOpenPanel()
         panel.canChooseFiles = false; panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
@@ -777,11 +815,11 @@ import NotePinTransport
             self?.transferMetrics?.observe(percent: 100, sdkBytesPerSecond: nil, at: ProcessInfo.processInfo.systemUptime)
             self?.updateTransferProgress()
         }
-        next.onDownloadComplete = { [weak self] url in
+        next.onDownloadComplete = { [weak self, weak next] url in
             Task { @MainActor in
                 guard let self, self.connectionAttempt == driverAttempt, let id = self.transferID else { return }
                 do {
-                    _ = try await self.library?.publishCompletedMP3(url, for: id)
+                    _ = try await self.library?.publishCompletedMP3(url, for: id, recorderHighlights: next?.downloadedHighlightSeconds)
                     self.downloadedForAnalysis.append(id)
                     self.status = VL.text("Запись сохранена на Mac")
                 } catch {
@@ -937,6 +975,42 @@ import NotePinTransport
             status = VL.text("Запись перемещена в корзину Vecta. На Plaud она сохранена.")
         } catch { status = VL.text("Не удалось завершить удаление: ") + error.localizedDescription; objectWillChange.send() }
     }
+    func canPermanentlyDeleteRecording(_ identity: NativeRecordingIdentity) -> Bool {
+        canDeleteRecording(identity) && !macRecorder.busy && !libraryQuestionBusy &&
+        localAI?.activeRequest == nil && library?.deletedRecordings.contains(where: { $0.identity == identity }) == true
+    }
+    func permanentlyDeleteRecording(_ identity: NativeRecordingIdentity) {
+        guard canPermanentlyDeleteRecording(identity), let library else { return }
+        purgingRecording = identity
+        let host = localAI, wasPaused = localAI?.queuePaused ?? false
+        host?.queuePaused = true
+        let root = processingRoot ?? localAI?.root
+        permanentDeletionTask = Task { @MainActor in
+            defer {
+                if localAI === host { host?.queuePaused = wasPaused }
+                purgingRecording = nil; permanentDeletionTask = nil; objectWillChange.send()
+            }
+            do {
+                let indexing = libraryIndexTask; indexing?.cancel(); await indexing?.value
+                clearLibraryQuestion()
+                try analysisQueue?.remove(identity)
+                if selected == identity { select(nil) }
+                if let root, FileManager.default.fileExists(atPath: root.appendingPathComponent("LocalAI/LibrarySearchV1/index.sqlite3").path) {
+                    try NativeRecordingPurge.validate(root.appendingPathComponent("LocalAI/LibrarySearchV1/index.sqlite3"), under: root)
+                    let index: AITranscriptIndexStore
+                    if let corpus = libraryCorpus { index = corpus.index }
+                    else { index = try AITranscriptIndexStore(root: root) }
+                    try await index.erase(Self.libraryKey(identity))
+                }
+                try await library.permanentlyDeleteRecording(identity)
+                libraryCorpusVersion += 1; libraryCorpus = nil
+                globalSearchHits.removeAll { $0.recording == identity }
+                batchCount = analysisQueue?.jobs.count ?? 0
+                reloadRootScopedState()
+                status = VL.text("Запись окончательно удалена из библиотеки Mac. Оригинал на Plaud сохранён.")
+            } catch { status = VL.text("Не удалось завершить удаление. Повторите удаление из корзины: ") + error.localizedDescription }
+        }
+    }
     func restoreRecording(_ identity: NativeRecordingIdentity) {
         do { try library?.restoreRecording(identity);libraryCorpusVersion+=1; objectWillChange.send(); status = VL.text("Запись восстановлена.") }
         catch { status = VL.text("Не удалось восстановить запись: ") + error.localizedDescription }
@@ -998,6 +1072,15 @@ import NotePinTransport
     }
     func setPlaybackRate(_ rate: Float) { guard [Float(0.75), 1, 1.25, 1.5, 2].contains(rate) else { return }; playbackRate = rate; player?.rate = rate }
     func seek(_ value: Double) { playbackStopTime=nil;let value=min(duration,max(0,value));player?.currentTime = value; progress = value }
+    @discardableResult func navigatePlaybackPhrase(_ direction: Int) -> Bool {
+        guard selected != nil, duration > 0, let result = rawAnalysis else { return false }
+        let phrases = result.segments.filter { $0.start.isFinite && $0.start >= 0 && $0.start <= duration }
+            .sorted { $0.start == $1.start ? $0.id < $1.id : $0.start < $1.start }
+        let focused = phrases.firstIndex { $0.id == focusedSegment }
+        guard let index = NativeRecordingKeyboardPolicy.phraseIndex(starts: phrases.map(\.start), position: progress, focused: focused, direction: direction) else { return false }
+        seek(phrases[index].start); focusedSegment = phrases[index].id; playbackNavigationID = UUID()
+        return true
+    }
     func playExcerpt(start:Double,end:Double,segment:Int?=nil) {
         guard let excerpt=AIAudioExcerpt(start:start,end:end,duration:duration) else { return }
         player?.pause();player?.currentTime=excerpt.start;focusedSegment=segment;progress=excerpt.start
@@ -1005,6 +1088,9 @@ import NotePinTransport
         playbackNavigationID=UUID()
     }
     func stop() async {
+        conferenceMonitor?.shutdown()
+        await permanentDeletionTask?.value
+        await macRecorder.stop()
         automationSleeping = true
         librarySourceTask?.cancel(); librarySourceTask = nil
         workspaceImportTask?.cancel(); workspaceImportTask = nil
@@ -1177,6 +1263,7 @@ private enum NativeOwnerTokenStore {
 @MainActor final class NativeMacDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     let model = NativeMacModel()
     private var window: NSWindow?
+    private var recordingMenu: NativeMacRecordingMenu?
     private var quitting = false
     private var cleanupFinished = false
     private var languageRestartHelper:Process?
@@ -1190,7 +1277,12 @@ private enum NativeOwnerTokenStore {
             try? FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
             model.localAI=try? LocalAIHost(root:root,resources:resources)
             model.destination = .ai; model.status = VL.text("Визуальная проверка: библиотека не открывается.")
-            if !CommandLine.arguments.contains("--verify-speaker-ui") && !CommandLine.arguments.contains("--verify-public-demo") {Task { await model.localAI?.refreshModels() }}
+            if !CommandLine.arguments.contains("--verify-speaker-ui") && !CommandLine.arguments.contains("--verify-public-demo") && !CommandLine.arguments.contains("--verify-conferences-ui") && !CommandLine.arguments.contains("--verify-recording-card") && !CommandLine.arguments.contains("--verify-formats-ui") {Task { await model.localAI?.refreshModels() }}
+            if CommandLine.arguments.contains("--verify-conferences-ui") { model.destination = .conferences }
+            if CommandLine.arguments.contains("--verify-formats-ui") {
+                do { try VectaAppChecks.prepareCustomFormatsUI(model: model, root: root, resources: resources) }
+                catch { fatalError("Synthetic formats fixture: \(error)") }
+            }
             if CommandLine.arguments.contains("--verify-reset-ui") {
                 model.savedDevice = try? SavedPlaudDevice(serialNumber: "882SYNTHETIC", model: .notePinS, protocolVersion: 20)
                 model.offlineAuthorizationReady = true; model.destination = .device
@@ -1199,6 +1291,10 @@ private enum NativeOwnerTokenStore {
             if CommandLine.arguments.contains("--verify-conversation") {
                 if CommandLine.arguments.contains("--verify-speaker-ui") {try? model.prepareSpeakerMergeVerification(root:root)}
                 else {try? model.prepareConversationVerification(root:root)}
+                model.destination = .library
+            }
+            if CommandLine.arguments.contains("--verify-highlight-ui") {
+                try? model.prepareHighlightVerification(root: root)
                 model.destination = .library
             }
             if CommandLine.arguments.contains("--verify-fast-transfer-ui") {
@@ -1240,7 +1336,12 @@ private enum NativeOwnerTokenStore {
         let verifying=VectaRuntimePreferences.isVerification
         let preferences=VL.preferences
         if verifying {preferences.set(CommandLine.arguments.contains("--verify-light") ? "light":"dark",forKey:"vecta.appearance")}
-        if verifying && CommandLine.arguments.contains("--verify-visual-gallery") {
+        if verifying && CommandLine.arguments.contains("--verify-recording-card") {
+            window.contentView = NSHostingView(rootView: HStack(alignment: .top, spacing: 20) {
+                NativeMacRecordingCard(model: model, display: .init(phase: .idle, elapsed: 0), open: {}, settings: {})
+                NativeMacRecordingCard(model: model, display: .init(phase: .recording, elapsed: 3675), open: {}, settings: {})
+            }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).background(Color.white).preferredColorScheme(.light))
+        } else if verifying && CommandLine.arguments.contains("--verify-visual-gallery") {
             window.contentView=NSHostingView(rootView:NativeVisualComponentGallery().defaultAppStorage(preferences).preferredColorScheme(CommandLine.arguments.contains("--verify-light") ? .light:.dark))
         } else {
             window.contentView = NSHostingView(rootView: NativeAppRoot(model: model).defaultAppStorage(preferences))
@@ -1250,6 +1351,7 @@ private enum NativeOwnerTokenStore {
         window.title = "Vecta"; window.minSize = NSSize(width: 760, height: 560)
         window.contentView = NSHostingView(rootView: NativeAppRoot(model: model).defaultAppStorage(UserDefaults.standard))
         #endif
+        window.isReleasedWhenClosed = false
         window.center(); window.makeKeyAndOrderFront(nil); self.window = window
         let menu=NSMenu()
         func section(_ title:String)->NSMenu {
@@ -1288,6 +1390,18 @@ private enum NativeOwnerTokenStore {
         windows.addItem(withTitle:VL.text("Свернуть"),action:#selector(NSWindow.performMiniaturize(_:)),keyEquivalent:"m")
         let fullscreen=windows.addItem(withTitle:VL.text("Полноэкранный режим"),action:#selector(NSWindow.toggleFullScreen(_:)),keyEquivalent:"f");fullscreen.keyEquivalentModifierMask=[.command,.control]
         NSApp.mainMenu = menu
+        if !VectaRuntimePreferences.isVerification {
+        model.applicationSettings.activate()
+        model.conferenceMonitor = NativeConferenceMonitor(preferences: model.macRecordingPreferences, recorder: model.macRecorder,
+            start: { [weak self] activity in
+                guard let self else { return }; self.model.startMacRecording(self.model.macRecordingPreferences.value.mode, activity: activity)
+            }, show: { [weak self] in
+                self?.model.destination = .conferences; self?.showMainWindow()
+            })
+        }
+        recordingMenu = NativeMacRecordingMenu(model: model) { [weak self] in
+            self?.showMainWindow()
+        }
         for number in [SIGTERM, SIGINT] {
             signal(number, SIG_IGN)
             let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
@@ -1300,11 +1414,15 @@ private enum NativeOwnerTokenStore {
         NSApp.activate(ignoringOtherApps: true)
         sleepObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification,
             object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in self?.model.suspendAutomation() }
+                Task { @MainActor in
+                    self?.model.conferenceMonitor?.suspend()
+                    await self?.model.macRecorder.stop()
+                    self?.model.suspendAutomation()
+                }
             }
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification,
             object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in self?.model.resumeAutomation() }
+                Task { @MainActor in self?.model.conferenceMonitor?.resume(); self?.model.resumeAutomation() }
             }
     }
     @objc func importAudio() {model.chooseAudioImport()}
@@ -1325,7 +1443,10 @@ private enum NativeOwnerTokenStore {
     @objc func compactWindow() { window?.setContentSize(NSSize(width: 760, height: 560)) }
     @objc func largeWindow() { window?.setContentSize(NSSize(width:1440,height:900)) }
     @objc func regularWindow() { window?.setContentSize(NSSize(width: 1100, height: 740)) }
-    @objc func openSettings() { model.destination = .settings }
+    private func showMainWindow() {
+        window?.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+    }
+    @objc func openSettings() { model.destination = .settings; showMainWindow() }
     func restartForLanguage(_ language:VectaLanguage) {
         guard language != VL.language,model.canRestartForLanguage,!quitting else{return}
         let defaults=VL.preferences,previous=defaults.object(forKey:"Vecta.interfaceLanguage")
@@ -1343,7 +1464,10 @@ private enum NativeOwnerTokenStore {
             model.languageRestartError=VL.text("Не удалось перезапустить Vecta. Закройте приложение и откройте его снова.")
         }
     }
-    func applicationDidBecomeActive(_ notification: Notification) { model.resumeAfterBluetoothAuthorization() }
+    func applicationDidBecomeActive(_ notification: Notification) {
+        if !VectaRuntimePreferences.isVerification { model.applicationSettings.refreshLoginStatus() }
+        model.resumeAfterBluetoothAuthorization()
+    }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if cleanupFinished { return .terminateNow }
         guard !quitting else { return .terminateCancel }
@@ -1357,7 +1481,12 @@ private enum NativeOwnerTokenStore {
         }
         return .terminateCancel
     }
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        !model.applicationSettings.backgroundOperationEnabled
+    }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showMainWindow(); return true
+    }
 }
 
 @main struct NativeMacMain {

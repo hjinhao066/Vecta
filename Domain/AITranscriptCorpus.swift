@@ -38,7 +38,7 @@ actor AITranscriptCorpus {
         }.sorted {a,b in a.2==b.2 ? a.0.request.createdAt>b.0.request.createdAt:a.2>b.2}
         guard let (carrier,original,_) = branches.first else {
             guard let body=item.legacyText?.trimmingCharacters(in:.whitespacesAndNewlines),!body.isEmpty else {return nil}
-            let revision=digest(Data(("legacy-v1"+item.title+body).utf8))
+            let revision=digest(Data(("legacy-v2"+item.title+body).utf8))
             return AILibraryDocument(key:item.key,revision:revision,sources:untimed(body,item:item,request:nil,transcript:nil,revision:revision))
         }
         let key=digest(Data((carrier.request.audioSHA256+(carrier.request.transcriptRequestID ?? carrier.request.id).uuidString).utf8))
@@ -52,7 +52,7 @@ actor AITranscriptCorpus {
         }
         let projected=corrected.rendered(carrier)
         let encoder=JSONEncoder();encoder.outputFormatting=[.sortedKeys]
-        let revision=digest(try encoder.encode(projected.segments)+Data(("chunks-v3|"+original.uuidString+item.title+String(item.date.timeIntervalSince1970)+(projected.unmatchedText ?? "")).utf8))
+        let revision=digest(try encoder.encode(projected.segments)+Data(("chunks-v4|"+original.uuidString+item.title+String(item.date.timeIntervalSince1970)+(projected.unmatchedText ?? "")).utf8))
         var sources=[AILibrarySource](),group=[AISpeechSegment](),chars=0
         func flush() {
             guard !group.isEmpty else {return}
@@ -103,7 +103,7 @@ actor AITranscriptCorpus {
                     + AIFileRevision.stamp(conversation.root.appendingPathComponent(key+".json"))
             }.sorted()
             let encoder=JSONEncoder();encoder.outputFormatting=[.sortedKeys]
-            let input=Self.digest(try encoder.encode(["inputs-v3",item.title,String(item.date.timeIntervalSince1970),item.legacyText ?? "",voiceStamp]+signatures))
+            let input=Self.digest(try encoder.encode(["inputs-v4",item.title,String(item.date.timeIntervalSince1970),item.legacyText ?? "",voiceStamp]+signatures))
             if existingInputs[item.key]==input {
                 indexed.insert(item.key)
             } else {

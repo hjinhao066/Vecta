@@ -60,6 +60,23 @@ import Foundation
             try check(action.isVisible == visible, "Fast-transfer visibility matches supported active-file state")
             try check(action.isEnabled == (visible && ready), "Fast-transfer readiness never silently hides a visible action")
         }
+        for (key, action) in [(UInt16(49), NativeRecordingKeyboardPolicy.Action.toggle), (123, .previous), (126, .previous), (124, .next), (125, .next)] {
+            try check(NativeRecordingKeyboardPolicy.action(keyCode: key, editing: false, modified: false, modal: false) == action, "Recording key mapping")
+            try check(NativeRecordingKeyboardPolicy.action(keyCode: key, editing: true, modified: false, modal: false) == nil, "Typing must not control playback")
+            try check(NativeRecordingKeyboardPolicy.action(keyCode: key, editing: false, modified: true, modal: false) == nil, "Modified keys and VoiceOver shortcuts pass through")
+            try check(NativeRecordingKeyboardPolicy.action(keyCode: key, editing: false, modified: false, modal: true) == nil, "Modal controls own their keys")
+        }
+        try check(NativeRecordingKeyboardPolicy.action(keyCode: 0, editing: false, modified: false, modal: false) == nil, "Unrelated keys pass through")
+        let starts: [Double] = [2, 5, 9]
+        try check(NativeRecordingKeyboardPolicy.phraseIndex(starts: starts, position: 0, focused: nil, direction: 1) == 0, "Next before speech goes to first phrase")
+        try check(NativeRecordingKeyboardPolicy.phraseIndex(starts: starts, position: 6, focused: nil, direction: 1) == 2, "Next during phrase goes forward")
+        try check(NativeRecordingKeyboardPolicy.phraseIndex(starts: starts, position: 6, focused: nil, direction: -1) == 0, "Previous during phrase goes backward")
+        try check(NativeRecordingKeyboardPolicy.phraseIndex(starts: starts, position: 2, focused: 0, direction: -1) == 0, "First phrase boundary is clamped")
+        try check(NativeRecordingKeyboardPolicy.phraseIndex(starts: starts, position: 12, focused: nil, direction: 1) == 2, "Last phrase boundary is clamped")
+        try check(NativeRecordingKeyboardPolicy.phraseIndex(starts: [2, 2, 5], position: 2, focused: 0, direction: 1) == 1, "Overlapping phrases remain individually navigable")
+        try check(NativeRecordingKeyboardPolicy.phraseIndex(starts: [], position: 0, focused: nil, direction: 1) == nil, "No transcript does not consume arrows")
+        try check(NativeRecordingKeyboardPolicy.phraseIndex(starts: [5, 2], position: 3, focused: nil, direction: 1) == nil, "Unordered phrase timeline is rejected")
+        try check(NativeRecordingKeyboardPolicy.phraseIndex(starts: [.nan], position: 0, focused: nil, direction: 1) == nil, "Nonfinite phrase time is rejected")
         print("Native UI state checks passed: \(assertions) assertions")
     }
 }

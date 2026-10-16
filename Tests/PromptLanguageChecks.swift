@@ -53,6 +53,11 @@ enum Worker {
         }
         require(SummaryPrompt.plainTasks("Suggestions\n- Prepare a report",assistant:false,language:.english).isEmpty, "English suggestions are not accepted tasks")
         require(SummaryPrompt.plainTasks("Задачи\n- Подготовить отчёт",assistant:false,language:.english).isEmpty, "language snapshot scopes task parsing")
+        for (text, language) in [("## Возражения клиента\n- Обсудить стоимость\n\n## Возможные шаги\n- Подготовить предложение", OutputLanguage.russian),
+                                 ("## Client objections\n- Discuss pricing\n\n## Possible next steps\n- Prepare a proposal", OutputLanguage.english)] {
+            require(SummaryPrompt.plainTasks(text, assistant: false, language: language).isEmpty, "custom analytical headings do not invent accepted tasks")
+            require(SummaryPrompt.plainTasks(text, assistant: true, language: language).isEmpty, "custom assistant headings never import tasks")
+        }
         print("PASS \(checks) model-free prompt-language checks; no model initialization, inference or user data")
     }
     static func tryLanguage(_ value: Any?) -> OutputLanguage? {

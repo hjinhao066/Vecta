@@ -54,12 +54,14 @@ final class VectaRecordingStore {
         try? Self.createDirectory(destination)
         return destination
     }
-    func markLocal(sessionID: Int, serialNumber: String, outputPath: String, verifiedDuration: TimeInterval? = nil) -> Bool {
+    func markLocal(sessionID: Int, serialNumber: String, outputPath: String, verifiedDuration: TimeInterval? = nil, recorderHighlightSeconds: [Double]? = nil) -> Bool {
         if let duration = verifiedDuration, !duration.isFinite || duration <= 0 { return false }
+        if let points = recorderHighlightSeconds, points.count > 10000 || !points.allSatisfy({ $0.isFinite && $0 >= 0 }) { return false }
         guard let relative = verifiedRelativePath(URL(fileURLWithPath: outputPath)) else { return false }
         return update(sessionID, serialNumber) { row in
             if row.status == .copying, let duration = verifiedDuration { row.duration = duration }
             row.localFileName = relative;row.status = .local;row.statusDetail = nil
+            if let recorderHighlightSeconds { row.recorderHighlightSeconds = recorderHighlightSeconds }
         }
     }
     func commitImportedAudio(digest: String, outputURL: URL, duration: TimeInterval, title: String) -> Bool {
@@ -79,6 +81,18 @@ final class VectaRecordingStore {
               recording(sessionID: sessionID, serialNumber: serialNumber)?.generatedTitle == nil else { return false }
         return update(sessionID, serialNumber) { $0.generatedTitle = normalized }
     }
+    func saveHighlights(sessionID: Int, serialNumber: String, seconds: [Double]) -> Bool {
+        guard seconds.count <= 10000, seconds.allSatisfy({ $0.isFinite && $0 >= 0 }) else { return false }
+        return update(sessionID, serialNumber) { $0.highlightSeconds = Array(Set(seconds)).sorted() }
+    }
+    func saveRecorderHighlights(sessionID: Int, serialNumber: String, seconds: [Double]) -> Bool {
+        guard seconds.count <= 10000, seconds.allSatisfy({ $0.isFinite && $0 >= 0 }) else { return false }
+        return update(sessionID, serialNumber) { $0.recorderHighlightSeconds = Array(Set(seconds)).sorted() }
+    }
+    func saveDeviceMarkings(sessionID: Int, serialNumber: String, points: [UInt32]) -> Bool {
+        guard points.count <= 65025 else { return false }
+        return update(sessionID, serialNumber) { $0.deviceMarkings = points }
+    }
     func markFailed(sessionID: Int, serialNumber: String, message: String) -> Bool {
         update(sessionID, serialNumber) { $0.status = .failed;$0.statusDetail = message }
     }
@@ -90,6 +104,41 @@ final class VectaRecordingStore {
         let file = root.appendingPathComponent(path.contains("/") ? path : "Audio/" + path).standardizedFileURL
         return verifiedRelativePath(file) == nil ? nil : file
     }
+    /// Explicit permanent local deletion only; the caller must own a trash tombstone.
+    /// Metadata remains retryable if a filesystem operation fails. No recorder API.
+    func permanentlyRemove(sessionID: Int, serialNumber: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        guard let row = rows.first(where: { $0.sessionID == sessionID && $0.deviceSerialNumber == serialNumber }) else { return }
+        guard row.status != .copying else { throw VectaRecordingStoreError.secureStorageUnavailable }
+        var files: [URL] = []
+        if let path = row.localFileName {
+            let file = root.appendingPathComponent(path.contains("/") ? path : "Audio/" + path).standardizedFileURL
+            guard file.path.hasPrefix(root.standardizedFileURL.path + "/Audio/"),
+                  !rows.contains(where: { ($0.sessionID != sessionID || $0.deviceSerialNumber != serialNumber) && $0.localFileName == path }) else {
+                throw VectaRecordingStoreError.secureStorageUnavailable
+            }
+            files.append(file)
+            if serialNumber.hasPrefix("local-audio-"), file.deletingLastPathComponent() == root.appendingPathComponent("Audio/" + Self.digest(serialNumber)) {
+                files += ["original.ogg", "original.opus"].map { file.deletingLastPathComponent().appendingPathComponent($0) }
+            }
+        }
+        // Preflight every existing ancestor and leaf before deleting any file.
+        for file in files {
+            var directory = root
+            try Self.requireDirectory(directory)
+            let relative = file.path.dropFirst(root.standardizedFileURL.path.count + 1)
+            for part in relative.split(separator: "/").dropLast() {
+                directory.appendPathComponent(String(part))
+                if FileManager.default.fileExists(atPath: directory.path) { try Self.requireDirectory(directory) }
+            }
+            if FileManager.default.fileExists(atPath: file.path) { try Self.requireRegularFile(file, maximumSize: nil) }
+        }
+        for file in files where FileManager.default.fileExists(atPath: file.path) { try FileManager.default.removeItem(at: file) }
+        guard publish(rows.filter { $0.sessionID != sessionID || $0.deviceSerialNumber != serialNumber }) else {
+            throw VectaRecordingStoreError.secureStorageUnavailable
+        }
+    }
+
     /// Historical AI requests use this immutable source digest. Compatibility
     /// hashing lives separately from new product identity and brand names.
     static func cloudSourceIdentifier(sessionID: Int, serialNumber: String, duration: TimeInterval) -> String? {
@@ -144,6 +193,9 @@ final class VectaRecordingStore {
                 guard !path.isEmpty, !path.hasPrefix("/"), !path.contains("\0"),
                       !path.split(separator: "/", omittingEmptySubsequences: false).contains(where: { $0 == ".." || $0 == "." || $0.isEmpty }) else { return false }
             }
+            if let points = row.highlightSeconds, points.count > 10000 || !points.allSatisfy({ $0.isFinite && $0 >= 0 }) { return false }
+            if let points = row.recorderHighlightSeconds, points.count > 10000 || !points.allSatisfy({ $0.isFinite && $0 >= 0 }) { return false }
+            if let points = row.deviceMarkings, points.count > 65025 { return false }
             if let title = row.generatedTitle, AIRecordingTitle.validated(title) == nil { return false }
             return true
         }

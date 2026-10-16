@@ -8,10 +8,10 @@ import signal
 import subprocess
 import uuid
 
-FLAGS = ('summary-options', 'reset-policy', 'export-eligibility', 'library-ownership',
+FLAGS = ('application-lifecycle', 'summary-options', 'reset-policy', 'export-eligibility', 'library-ownership',
          'performance-refresh', 'saved-detail-preparation', 'performance-state',
          'ai-result-events', 'confirmed-learning', 'language-restart-policy',
-         'fast-transfer-availability', 'speaker-merge', 'sync-state')
+         'fast-transfer-availability', 'speaker-merge', 'sync-state', 'conference-policy', 'playback-keyboard', 'library-search', 'model-download-host', 'highlights', 'visual-composition')
 
 
 def main():
@@ -40,7 +40,7 @@ def main():
             raise RuntimeError('Native executable regression: '+flag)
         results.append({'check': flag, 'status': 'PASS'})
     (app.parent/'native-checks.json').write_text(json.dumps({'syntheticOnly': True, 'ownerAudioRead': False, 'inference': False, 'physicalHardware': 'NOT TESTED', 'productionAppLaunched': False, 'checks': results}, indent=2)+'\n')
-    print('PASS13 actual compiled native-app regressions; no models, owner library or device actions')
+    print(f'PASS{len(FLAGS)} actual compiled native-app regressions; no models, owner library or device actions')
 
 
 if __name__ == '__main__':

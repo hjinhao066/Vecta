@@ -15,6 +15,7 @@ struct NativeGeneralSettings: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
                 ScreenTitle(title: VL.text("Настройки"), subtitle: VL.text("Библиотека, устройство и локальный ИИ."))
+                NativeApplicationBehaviorSettings(settings: model.applicationSettings)
                 NativeLanguagePicker(model:model).padding(20).background(Ink.surface).cornerRadius(9)
                 HStack {Text(VL.text("Оформление"));Spacer();Picker(VL.text("Тема"),selection:$appearance) {ForEach(VectaAppearance.allCases) {Text($0.title).tag($0.rawValue)}}.frame(width:200)}.padding(20).background(Ink.surface).cornerRadius(9)
                 VStack(alignment: .leading, spacing: 16) {
@@ -50,6 +51,10 @@ struct NativeGeneralSettings: View {
                     Text(VL.text("Обработка записей")).font(.system(size: 18, weight: .semibold))
                     Toggle(VL.text("Автоматическое саммари после синхронизации"), isOn: Binding(get: { model.automaticSummary }, set: model.setAutomaticSummary))
                         .toggleStyle(.checkbox)
+                    Toggle(VL.text("Быстрая расшифровка"), isOn: Binding(get: { model.localAI?.fastTranscriptionEnabled ?? true }, set: { value in model.localAI?.setFastTranscriptionEnabled(value) }))
+                        .toggleStyle(.checkbox)
+                        .disabled(model.localAI == nil)
+                    Text(VL.text("Быстрее начинает расшифровку, сохраняя движок в памяти, пока Vecta открыт. Это может занимать около 700 МБ дополнительной оперативной памяти. При выключении используется обычный запуск модели для каждой записи. Первая подготовка всё равно занимает время.")).font(.system(size: 12)).foregroundColor(Ink.secondary).lineSpacing(4)
                     Text(VL.text("Расшифровка и саммари создаются на этом Mac. Модели устанавливаются отдельно.")).font(.system(size: 12)).foregroundColor(Ink.secondary).lineSpacing(4)
                     Text(VL.text("После синхронизации новые скачанные записи обрабатываются в выбранных ниже форматах. Изменения применяются к новым заданиям; готовые результаты сохраняются."))
                         .font(.system(size: 12)).foregroundColor(Ink.secondary).lineSpacing(4)
@@ -66,7 +71,9 @@ struct NativeGeneralSettings: View {
                     }
                 }.padding(20).background(Ink.surface).cornerRadius(9)
             }.frame(maxWidth: 760, alignment: .leading).padding(32).frame(maxWidth: .infinity, alignment: .topLeading)
-        }.alert(VL.text("Постоянное подключение к Plaud"),isPresented:$continuousWarning) {
+        }.onAppear { model.loadWorkspace() }
+        .onChange(of: model.processingRoot ?? model.localAI?.root) { _ in model.loadWorkspace() }
+        .alert(VL.text("Постоянное подключение к Plaud"),isPresented:$continuousWarning) {
             Button(VL.text("Включить постоянно")) {model.setAutoSyncInterval(.continuous)}
             Button(VL.text("Отмена"),role:.cancel) {}
         } message: {Text(VL.text("Vecta будет поддерживать Bluetooth-соединение с Plaud. Это может привести к более быстрому разряду устройства."))}
@@ -168,6 +175,8 @@ struct NativeAISettings: View {
                 VStack(spacing: 1) { ForEach(host.registry.models.filter { ["qwen4b", "qwen9b"].contains($0.id) }) { model in modelRow(model) } }
                 if !host.supported { Text(VL.text("Локальный ИИ недоступен в этой версии macOS.")).foregroundColor(Color(hex: 0xE9B949)) }
                 if let message = host.message { Text(message).font(.system(size: 12)).foregroundColor(Ink.secondary) }
+                Button(VL.text("Установить все модели")) { host.installAll() }.buttonStyle(QuietButton(primary:true)).disabled(!host.supported || host.removingSpeech)
+                Text(VL.text("Можно скачивать несколько моделей одновременно. Установка не меняет выбранную модель для обработки.")).font(.system(size:12)).foregroundColor(Ink.secondary)
                 Button(VL.text("Проверить модели")) { Task { await host.refreshModels() } }.buttonStyle(QuietButton()).disabled(host.activeRequest != nil || host.installingSpeech)
             }.frame(maxWidth: 760, alignment: .leading).padding(32).frame(maxWidth: .infinity, alignment: .topLeading)
         }.confirmationDialog(VL.text("Удалить модель с этого Mac?"), isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
@@ -190,7 +199,7 @@ struct NativeAISettings: View {
                 }
                 Spacer()
             }
-            Text(VL.text("WhisperKit распознаёт слова, SpeakerKit разделяет реплики по голосам, а токенизатор помогает модели обрабатывать текст. Все три компонента устанавливаются по очереди одной кнопкой. Записи обрабатываются на вашем Mac и не отправляются в облако.")).font(.system(size:12)).foregroundColor(Ink.secondary).lineSpacing(3)
+            Text(VL.text("WhisperKit распознаёт слова, SpeakerKit разделяет реплики по голосам, а токенизатор помогает модели обрабатывать текст. Все три компонента скачиваются параллельно одной кнопкой. Записи обрабатываются на вашем Mac и не отправляются в облако.")).font(.system(size:12)).foregroundColor(Ink.secondary).lineSpacing(3)
             DisclosureGroup(VL.text("Состав загрузки"),isExpanded:$speechDetailsExpanded) {
                 ForEach(models) {model in
                     HStack {Text(VL.string(model.title));Spacer();Text(VL.bytes(model.size));if host.statuses[model.id]?.state == .installed {Image(systemName:"checkmark.circle.fill").foregroundColor(Ink.success)}}.font(.system(size:11)).foregroundColor(Ink.secondary).padding(.vertical,4)
@@ -204,6 +213,12 @@ struct NativeAISettings: View {
                 HStack {Label(VL.text("Установлено"),systemImage:"checkmark.circle.fill").font(.system(size:12)).foregroundColor(Ink.success);Spacer();Button {removing="speech"} label:{Image(systemName:"ellipsis")}.buttonStyle(.plain).help(VL.text("Удалить компоненты расшифровки")).disabled(host.activeRequest != nil || host.installingSpeech)}
             } else if checking {HStack {ProgressView().controlSize(.small);Text(VL.text("Проверяем компоненты…")).font(.system(size:12))}}
             else {Button(VL.text("Установить голосовую расшифровку")) {host.installSpeech()}.buttonStyle(QuietButton(primary:true)).disabled(!host.supported || host.activeRequest != nil)}
+            if !host.removingSpeech {
+                Button(VL.text("Удалить компоненты и незавершённые загрузки…")) { removing="speech" }.buttonStyle(QuietButton()).disabled(host.activeRequest != nil)
+                if host.installingSpeech {
+                    Text(VL.bytes(Int64(LocalModelManager.speechIDs.reduce(0.0) { $0 + (host.downloadSpeeds[$1] ?? 0) }))+"/s").font(.system(size:11)).foregroundColor(Ink.secondary)
+                }
+            }
             ForEach(models) {model in if let error=host.statuses[model.id]?.error {Text(VL.string(model.title)+": "+error).font(.system(size:12)).foregroundColor(Ink.secondary)}}
         }.padding(20).background(Ink.surface).cornerRadius(9)
     }
@@ -225,21 +240,43 @@ struct NativeAISettings: View {
                 Spacer()
                 if status?.state == .installed {
                     Label(VL.text("Установлена"), systemImage: "checkmark.circle.fill").font(.system(size: 11)).foregroundColor(Ink.success)
-                    Button { removing = model.id } label: { Image(systemName: "ellipsis") }.buttonStyle(.plain).padding(7).disabled(host.activeRequest != nil || host.installingSpeech).help(VL.text("Удалить модель…"))
+                    Button(VL.text("Удалить…")) { removing = model.id }.buttonStyle(QuietButton()).disabled(host.activeRequest != nil)
                 } else if [.preparing, .downloading].contains(status?.state) {
                     Button(VL.text("Пауза")) { host.cancelDownload(model.id) }.buttonStyle(QuietButton())
                 } else if [.verifying, .deleting].contains(status?.state) {
                     ProgressView().controlSize(.small); Text(status?.state == .deleting ? VL.text("Удаляем…") : VL.text("Проверяем…")).font(.system(size: 11)).foregroundColor(Ink.secondary)
                 } else {
-                    Button(status?.state == .damaged ? VL.text("Восстановить") : VL.text("Установить / продолжить")) { host.install(model.id) }.buttonStyle(QuietButton(primary: true)).disabled(!host.supported || host.installingSpeech || host.activeRequest != nil || !(AISummaryModelID(rawValue:model.id)?.compatible() ?? true))
+                    Button(status?.state == .damaged ? VL.text("Восстановить") : VL.text("Установить / продолжить")) { host.install(model.id) }.buttonStyle(QuietButton(primary: true)).disabled(!host.supported)
                 }
             }
             if status?.state == .downloading {
                 ProgressView(value: status?.fraction ?? 0)
-                Text("\(Int((status?.fraction ?? 0) * 100))% · " + VL.bytes(status?.received ?? 0)).font(.system(size: 11)).foregroundColor(Ink.secondary)
+                Text("\(Int((status?.fraction ?? 0) * 100))% · " + VL.bytes(status?.received ?? 0) + " · " + VL.bytes(Int64(host.downloadSpeeds[model.id] ?? 0)) + "/s").font(.system(size: 11)).foregroundColor(Ink.secondary)
+            }
+            if status?.state != .installed && status?.state != .deleting {
+                Button(VL.text("Удалить незавершённую загрузку…")) { removing = model.id }.buttonStyle(QuietButton()).disabled(host.activeRequest != nil)
             }
             if let error = status?.error { Text(error).font(.system(size: 12)).foregroundColor(Ink.error) }
         }.padding(18).background(Ink.surface).cornerRadius(9)
     }
 }
 
+
+struct NativeApplicationBehaviorSettings: View {
+    @ObservedObject var settings: NativeApplicationSettings
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(VL.text("Запуск и фоновая работа")).font(.system(size: 18, weight: .semibold))
+            Toggle(VL.text("Запускать при входе в macOS"), isOn: Binding(get: { settings.launchAtLoginEnabled }, set: settings.setLaunchAtLoginEnabled))
+                .toggleStyle(.checkbox)
+            Text(VL.text("Vecta будет запускаться автоматически после входа в вашу учётную запись на Mac.")).font(.system(size: 12)).foregroundColor(Ink.secondary).lineSpacing(4)
+            if let message = settings.loginStatusMessage {
+                Text(message).font(.system(size: 12)).foregroundColor(Ink.secondary).lineSpacing(4)
+                Button(VL.text("Открыть объекты входа macOS"), action: settings.openLoginSettings).buttonStyle(QuietButton())
+            }
+            Toggle(VL.text("Работать в фоновом режиме"), isOn: Binding(get: { settings.backgroundOperationEnabled }, set: settings.setBackgroundOperationEnabled))
+                .toggleStyle(.checkbox)
+            Text(VL.text("При закрытии окна Vecta продолжает синхронизацию и обработку записей. Открыть окно снова можно из Dock или строки меню. Чтобы завершить работу, выберите «Завершить Vecta» или нажмите ⌘Q. Если выключить эту настройку, закрытие окна завершит приложение.")).font(.system(size: 12)).foregroundColor(Ink.secondary).lineSpacing(4)
+        }.padding(20).background(Ink.surface).cornerRadius(9)
+    }
+}

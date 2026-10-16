@@ -18,9 +18,11 @@ actor AITranscriptIndexStore {
     private var encoder:AnyObject?
     private var encoderID=""
     private let embeddingLanguage:NLLanguage = VL.language == .english ? .english:.russian
+    private let semanticSearch:Bool
     private var embeddingCache:[String:[Float]]=[:]
     private let transient=unsafeBitCast(-1,to:sqlite3_destructor_type.self)
-    init(root:URL) throws {
+    init(root:URL, semanticSearch:Bool = true) throws {
+        self.semanticSearch=semanticSearch
         let folder=root.appendingPathComponent("LocalAI/LibrarySearchV1",isDirectory:true)
         try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true,attributes:[.posixPermissions:0o700])
         let file=folder.appendingPathComponent("index.sqlite3")
@@ -67,6 +69,14 @@ actor AITranscriptIndexStore {
     func retain(_ keys:Set<String>) throws {
         for key in try revisions().keys where !keys.contains(key) {try remove(key)}
     }
+    func erase(_ key:String) throws {
+        try exec("PRAGMA secure_delete=ON")
+        try exec("BEGIN IMMEDIATE")
+        do { try remove(key); try exec("COMMIT") }
+        catch { try? exec("ROLLBACK"); throw error }
+        embeddingCache.removeAll()
+        try exec("PRAGMA wal_checkpoint(TRUNCATE)")
+    }
     private func remove(_ key:String) throws {
         let p=try statement("SELECT id FROM chunks WHERE document=?");bind(key,p,1)
         var ids=[Int64]();while sqlite3_step(p)==SQLITE_ROW {ids.append(sqlite3_column_int64(p,0))};sqlite3_finalize(p)
@@ -75,7 +85,7 @@ actor AITranscriptIndexStore {
     }
     private func embedding(_ text:String) throws -> [Float]? {
         if let cached=embeddingCache[text] {return cached}
-        guard #available(macOS 14.0,*) else {return nil}
+        guard semanticSearch, #available(macOS 14.0,*) else {return nil}
         if encoder==nil {
             guard let e=NLContextualEmbedding(language:embeddingLanguage),e.hasAvailableAssets else {return nil}
             try e.load();encoder=e;encoderID=e.modelIdentifier
@@ -102,7 +112,8 @@ actor AITranscriptIndexStore {
         }
         // Compute outside the transaction: cancellation leaves the previous revision usable.
         var prepared=[(AILibrarySource,[Float]?)]()
-        for source in document.sources {try Task.checkCancellation();prepared.append((source,try embedding(source.text)))}
+        for source in document.sources {try Task.checkCancellation();prepared.append((source,try? embedding(source.text)))}
+        try Task.checkCancellation()
         try exec("BEGIN IMMEDIATE")
         do {
             try remove(document.key)
@@ -112,11 +123,11 @@ actor AITranscriptIndexStore {
                 let p=try statement("INSERT INTO chunks(document,source,text,vector,encoder) VALUES(?,?,?,?,?)");defer{sqlite3_finalize(p)}
                 let bytes=try JSONEncoder().encode(source);bind(document.key,p,1)
                 _=bytes.withUnsafeBytes{sqlite3_bind_blob(p,2,$0.baseAddress,Int32(bytes.count),transient)}
-                bind(source.title+" "+source.text,p,3)
+                bind(Self.normalizedSearchText(source.title+" "+source.text),p,3)
                 if let vector {_=vector.withUnsafeBytes{sqlite3_bind_blob(p,4,$0.baseAddress,Int32($0.count),transient)};bind(encoderID,p,5)}
                 guard sqlite3_step(p)==SQLITE_DONE else {throw AITranscriptIndexError.database}
                 let id=sqlite3_last_insert_rowid(db)
-                let f=try statement("INSERT INTO text_index(rowid,text) VALUES(?,?)");defer{sqlite3_finalize(f)};sqlite3_bind_int64(f,1,id);bind(source.title+" "+source.text,f,2)
+                let f=try statement("INSERT INTO text_index(rowid,text) VALUES(?,?)");defer{sqlite3_finalize(f)};sqlite3_bind_int64(f,1,id);bind(Self.normalizedSearchText(source.title+" "+source.text),f,2)
                 guard sqlite3_step(f)==SQLITE_DONE else {throw AITranscriptIndexError.database}
                 if let vector {vectors[id]=vector;vectorDocuments[id]=document.key}
             }
@@ -134,6 +145,28 @@ actor AITranscriptIndexStore {
         }
         vectorsLoaded=true
     }
+    static func normalizedSearchText(_ text:String) -> String {
+        text.lowercased().replacingOccurrences(of:"ё",with:"е")
+    }
+    static func lexicalQuery(_ question:String) -> String {
+        let ignored=Set(["что","чем","как","где","когда","какие","какой","было","были","мне","все","всех","записи","записям","расскажи","пожалуйста","для","про","при","это","его","она","они","нам","нас","мои","моих","своих","говорил","говорили","сказал","сказали","рассказывал","обсуждали","упоминал","упоминали","узнать","поводу","договорились","решили","what","when","where","which","about","with","have","were","did","the","and","our","please"])
+        let words=normalizedSearchText(question).components(separatedBy:CharacterSet.alphanumerics.inverted)
+        var seen=Set<String>(),terms=[String]()
+        for word in words where word.count>2 && !ignored.contains(word) && seen.insert(word).inserted {
+            var stem=word
+            let cyrillic=word.unicodeScalars.allSatisfy({(0x430...0x44f).contains($0.value)})
+            if cyrillic {
+                for suffix in ["иями","ями","ами","ого","ему","ому","ыми","ими","иях","ах","ях","ой","ей","ую","юю","ая","яя","ое","ее","ые","ие","ов","ев","ам","ям","ом","ем","ы","и","а","я","у","ю","е"] where word.hasSuffix(suffix) && word.count-suffix.count>=3 {
+                    stem=String(word.dropLast(suffix.count));break
+                }
+            }
+            // Prefix matching tolerates Russian case endings, including proper names.
+            // Only alphanumeric tokens enter the quoted FTS expression.
+            terms.append("\""+stem+"\""+(cyrillic ? "*":""))
+            if terms.count>=24 {break}
+        }
+        return terms.joined(separator:" OR ")
+    }
     func search(_ question:String,visible:Set<String>,characterBudget:Int=10_000) throws -> [AILibrarySource] {
         try Task.checkCancellation()
         let version=try statement("PRAGMA data_version")
@@ -143,14 +176,19 @@ actor AITranscriptIndexStore {
             dataVersion=next
         }
         sqlite3_finalize(version)
-        let words=question.lowercased().components(separatedBy:CharacterSet.alphanumerics.inverted).filter{$0.count>2 && !["что","как","где","когда","какие","было","были","мне","все","всех","записи","записям","расскажи","пожалуйста","для","про","при","это","его","она","они","нам","нас","мои","моих","своих","говорил","говорили","сказал","сказали","рассказывал","обсуждали","упоминал","упоминали","узнать"].contains($0)}
-        let terms=Array(Set(words.prefix(24))).map{"\""+$0+"\""}.joined(separator:" OR ")
+        let terms=Self.lexicalQuery(question)
         var ranks=[Int64:Double]()
         if !terms.isEmpty {
-            let p=try statement("SELECT rowid FROM text_index WHERE text_index MATCH ? ORDER BY bm25(text_index) LIMIT 80");defer{sqlite3_finalize(p)};bind(terms,p,1)
-            var rank=0;while sqlite3_step(p)==SQLITE_ROW {rank+=1;ranks[sqlite3_column_int64(p,0)]=1/Double(30+rank)}
+            let p=try statement("SELECT text_index.rowid,chunks.document FROM text_index JOIN chunks ON chunks.id=text_index.rowid WHERE text_index MATCH ? ORDER BY bm25(text_index)");defer{sqlite3_finalize(p)};bind(terms,p,1)
+            var rank=0,scanned=0
+            while sqlite3_step(p)==SQLITE_ROW {
+                scanned+=1;if scanned%256==0 {try Task.checkCancellation()}
+                guard visible.contains(String(cString:sqlite3_column_text(p,1))) else {continue}
+                rank+=1;ranks[sqlite3_column_int64(p,0)]=1/Double(30+rank)
+                if rank>=80 {break}
+            }
         }
-        if let query=try embedding(question) {
+        if let query=try? embedding(question) {
             try loadVectors()
             var scores=[(Int64,Float)]();scores.reserveCapacity(vectors.count)
             var iteration=0
@@ -160,6 +198,7 @@ actor AITranscriptIndexStore {
             }
             for (rank,pair) in Self.topScores(scores,limit:80).enumerated() {ranks[pair.0,default:0]+=1/Double(30+rank+1)}
         }
+        try Task.checkCancellation()
         var selected=[AILibrarySource](),counts=[String:Int](),used=0,intervals=[String:Set<String>]()
         let best=ranks.values.max() ?? 0
         for (id,score) in ranks.sorted(by:{$0.value==$1.value ? $0.key<$1.key:$0.value>$1.value}) {

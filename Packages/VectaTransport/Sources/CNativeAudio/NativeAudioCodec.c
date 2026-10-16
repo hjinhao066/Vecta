@@ -30,6 +30,10 @@ int op_audio_decode(OPAudioCodec *codec, const uint8_t *packet, int bytes, int16
     if (!codec || !packet || bytes <= 0 || !pcm || capacity_per_channel <= 0) return -1000;
     return opus_decode(codec->decoder, packet, bytes, pcm, capacity_per_channel, 0);
 }
+int op_audio_conceal(OPAudioCodec *codec, int16_t *pcm, int samples_per_channel) {
+    if (!codec || !pcm || samples_per_channel != 320) return -1000;
+    return opus_decode(codec->decoder, NULL, 0, pcm, samples_per_channel, 0);
+}
 int op_audio_mp3(OPAudioCodec *codec, const int16_t *pcm, int count, uint8_t *output, int capacity) {
     if (!codec || !pcm || count < 0 || !output) return -1000;
     if (codec->channels == 2) return lame_encode_buffer_interleaved(codec->encoder, (short *)pcm, count, output, capacity);

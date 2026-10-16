@@ -77,6 +77,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
     private var downloadCollector: AudioDownloadCollector?
     private var downloadedRawURL: URL?
     private var downloadedMP3URL: URL?
+    private(set) var downloadedHighlightSeconds: [Double]?
     private var preparationTask: Task<Void, Never>?
     private var decodingTask: Task<NativeAudioConversion, Error>?
     private var audioChannels = 1
@@ -686,6 +687,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
         transition(.decoding, "Готовим MP3…")
         let privateKey = identity?.privateKey
         let defaultChannels = audioChannels
+        let readsHighlights = config.deviceType == "notepins" && protocolVersion == 20
         let outputURL = rawURL.deletingPathExtension().appendingPathExtension("mp3")
         let task = Task.detached(priority: .userInitiated) {
             let input = try FileHandle(forReadingFrom: rawURL)
@@ -695,7 +697,8 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
             let channels = header.map { Int($0.channels) } ?? defaultChannels
             let duration = header.map { Double($0.durationSeconds) }
             return try NativeAudioConverter.convert(rawURL: rawURL, outputURL: outputURL,
-                channels: channels, expectedDuration: duration, privateKey: privateKey)
+                channels: channels, expectedDuration: duration, privateKey: privateKey,
+                recoverDamagedRecorderPackets: true, readRecorderHighlights: readsHighlights)
         }
         decodingTask = task
         Task { @MainActor [weak self] in
@@ -704,8 +707,11 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
                 guard let self, !self.stopped else { return }
                 self.decodingTask = nil
                 self.downloadedMP3URL = conversion.outputURL
+                self.downloadedHighlightSeconds = conversion.recorderHighlightSeconds
                 self.events.append(["decodedSamples": conversion.decodedSamples,
-                                    "duration": conversion.duration, "sampleRate": conversion.sampleRate])
+                                    "duration": conversion.duration, "sampleRate": conversion.sampleRate,
+                                    "concealedPackets": conversion.concealedPackets,
+                                    "concealedDuration": Double(conversion.concealedPackets) * 0.02])
                 self.transition(.decoded, "Запись передана: \(conversion.outputURL.lastPathComponent)")
                 self.onDownloadComplete?(conversion.outputURL)
             } catch {

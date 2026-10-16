@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor extension NativeMacModel {
     var canRestartForLanguage:Bool {
-        !busy && !importingAudio && !chatBusy && !libraryQuestionBusy && !requestingAnalysis && !visualRetryBusy &&
+        !macRecorder.busy && !busy && !importingAudio && !chatBusy && !libraryQuestionBusy && !requestingAnalysis && !visualRetryBusy &&
         !analysisBusy && !batchChecking && batchActiveRequest == nil &&
         !scanning && !languageRestarting && localAI?.activeRequest == nil &&
         localAI?.installingSpeech != true && localAI?.removingSpeech != true &&
@@ -42,7 +42,7 @@ struct NativeAppRoot:View {
             else {NativeWelcomeScreen(model:model) {
                 VL.preferences.set(true,forKey:"Vecta.welcomeCompleted");welcomed=true
             }}
-        }.environment(\.locale,VL.locale)
+        }.environment(\.locale,VL.locale).vectaFocusStyle()
     }
 }
 

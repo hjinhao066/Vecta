@@ -94,7 +94,8 @@ def main():
         raise SystemExit('Use a new artifact directory; existing files are preserved.')
     verifier = runpy.run_path(str(ROOT/'Tools/verify-release.py'), run_name='dmg_verifier')
     # The release verifier binds source/link/codec/resources before packaging.
-    verifier['verify'](build)
+    verification = verifier['verify'](build)
+    signing = verification['signing']
     app = build/'Vecta.app'
     before = verifier['inventory'](app)
     metadata = plistlib.loads((app/'Contents/Info.plist').read_bytes())
@@ -163,11 +164,20 @@ def main():
     licenses = out/('Vecta-'+version+'-licenses.tar.gz')
     with tarfile.open(licenses, 'w:gz') as archive:
         archive.add(notices, arcname='Licenses')
-    notes = '# Vecta '+version+' — developer preview\n\nNative macOS, Apple Silicon, macOS15+. Local WhisperKit/SpeakerKit and MLX Qwen4B/9B. Models are installed separately by explicit user action. Modern recorder first provisioning requires authorized PLAUD Partner credentials; cached reconnect is local.\n\nThis DMG is ad-hoc signed, NOT Developer ID signed/notarized. See INSTALL.md for Apple-supported installation and the release readiness report for verification limits. Hardware coverage is limited to the documented tested setup. Keep a backup before first launch/migration.\n\nAssets: DMG, SHA256SUMS, matching source, component licenses and LAME source/object/relink kit. Do not distribute the DMG without its matching kit. Nothing was published by this build.\n'
+    signature_label = {'ad-hoc': 'ad-hoc', 'apple-development': 'Apple Development', 'developer-id-application': 'Developer ID Application', 'certificate-signed': 'certificate' }[signing['signature']]
+    signing_notice = f"The app is {signature_label} signed, " + ('NOT notarized.' if verification['developerID'] else 'NOT Developer ID signed or notarized.')
+    notes = f"""# Vecta {version} — build {metadata['CFBundleVersion']} developer preview
+
+Native macOS, Apple Silicon, macOS15+. Local WhisperKit/SpeakerKit and MLX Qwen4B/9B. Models are installed separately by explicit user action. Modern recorder first provisioning requires authorized PLAUD Partner credentials; cached reconnect is local.
+
+{signing_notice} See INSTALL.md for Apple-supported installation and the release readiness report for verification limits. Hardware coverage is limited to the documented tested setup. Keep a backup before first launch/migration.
+
+Assets: DMG, SHA256SUMS, matching source, component licenses and LAME source/object/relink kit. Do not distribute the DMG without its matching kit. Nothing was published by this build.
+"""
     (out/'RELEASE_NOTES.md').write_text(notes)
     values = {p.name: verifier['digest'](p) for p in sorted(out.iterdir()) if p.is_file()}
     (out/'SHA256SUMS').write_text(''.join(value+'  '+name+'\n' for name, value in values.items()))
-    summary = {'dmg': dmg.name, 'bytes': dmg.stat().st_size, 'sha256': verifier['digest'](dmg), 'hdiutilVerify': 'PASS', 'mountAndDetach': 'PASS', 'finderLayoutData': 'PASS', 'mountedBundleIdentity': 'PASS', 'temporaryApplicationsCopy': 'PASS', 'actualApplicationsInstall': 'NOT TESTED', 'cleanUserGatekeeper': 'NOT TESTED', 'signature': 'ad-hoc', 'notarized': False, 'published': False}
+    summary = {'dmg': dmg.name, 'bytes': dmg.stat().st_size, 'sha256': verifier['digest'](dmg), 'hdiutilVerify': 'PASS', 'mountAndDetach': 'PASS', 'finderLayoutData': 'PASS', 'mountedBundleIdentity': 'PASS', 'temporaryApplicationsCopy': 'PASS', 'actualApplicationsInstall': 'NOT TESTED', 'cleanUserGatekeeper': 'NOT TESTED', 'signature': signing['signature'], 'signing': signing, 'developerID': verification['developerID'], 'notarized': False, 'published': False}
     (out/'artifact-verification.json').write_text(json.dumps(summary, indent=2)+'\n')
     print(json.dumps(summary, sort_keys=True))
 

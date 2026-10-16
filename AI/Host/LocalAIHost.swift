@@ -95,8 +95,10 @@ import AVFoundation
     let manager: LocalModelManager
     @Published private(set) var installingSpeech=false
     @Published private(set) var removingSpeech=false
-    private var speechDownload:Task<Void,Never>?
     private var downloads: [String: Task<Void, Never>] = [:]
+    private var downloadGenerations: [String: UUID] = [:]
+    @Published private(set) var downloadSpeeds: [String: Double] = [:]
+    private var downloadSamples: [String: (TimeInterval, Int64)] = [:]
     private var timer: Timer?
     private let mailbox=LocalAIMailbox()
     private var polling=false
@@ -117,6 +119,13 @@ import AVFoundation
     var recordingOperationActive:Bool {activeRequest != nil && !libraryAnswerActive}
     private var operation: Task<Void, Never>?
     private var process: Process?
+    private var speechRuntime: LocalAISpeechWorker?
+    private var speechRuntimeClosing: Task<Void, Never>?
+    private var speechWarmup: Task<Void, Never>?
+    private var speechWarmupID: UUID?
+    private var speechWarmupFailures = 0
+    private var speechRequestActive = false
+    private var closeSpeechAfterActive = false
     private var libraryRuntime:LocalAIWarmWorker?
     private var libraryRuntimeClosing:Task<Void,Never>?
     private var libraryIdleTask:Task<Void,Never>?
@@ -125,19 +134,47 @@ import AVFoundation
     private var stopped = false
     private let resourceManager = LocalAIResourceManager()
     private var resourceInterrupted = false
-    @Published var queuePaused = UserDefaults.standard.bool(forKey: "VectaLocalAIQueuePaused")
+    private let preferences: UserDefaults
+    @Published var queuePaused: Bool
+    @Published private(set) var fastTranscriptionEnabled: Bool
     func setQueuePaused(_ value: Bool) {
-        queuePaused = value; UserDefaults.standard.set(value, forKey: "VectaLocalAIQueuePaused")
+        queuePaused = value; preferences.set(value, forKey: "VectaLocalAIQueuePaused")
+    }
+    func setFastTranscriptionEnabled(_ value: Bool) {
+        guard fastTranscriptionEnabled != value else { return }
+        fastTranscriptionEnabled = value
+        preferences.set(value, forKey: "VectaFastTranscriptionEnabled")
+        if value {
+            speechWarmupFailures = 0
+            closeSpeechAfterActive = false
+            Task { [weak self] in
+                guard let self else { return }
+                await self.cancelSpeechWarmup()
+                if let closing = self.speechRuntimeClosing { await closing.value }
+                await self.prewarmSpeechIfEligible()
+            }
+        } else {
+            Task { [weak self] in
+                guard let self, !self.fastTranscriptionEnabled else { return }
+                await self.cancelSpeechWarmup()
+                guard !self.fastTranscriptionEnabled else { await self.prewarmSpeechIfEligible(); return }
+                if self.speechRequestActive { self.closeSpeechAfterActive = true }
+                else { await self.closeSpeechRuntime() }
+            }
+        }
     }
     var onOpenSettings: (() -> Void)?
     private var refreshingModels = false
     private var store: LocalAIFileStore { LocalAIFileStore(root: root) }
     var supported: Bool { ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 15 }
 
-    init(root: URL, resources: URL) throws {
-        self.root = root; self.resources = resources
+    init(root: URL, resources: URL, modelsRoot: URL? = nil, defaults: UserDefaults = VL.preferences,
+         makeDownloader: @escaping @Sendable () -> any LocalModelDownloading = { LocalModelDownloader() }) throws {
+        self.root = root; self.resources = resources; preferences = defaults
+        queuePaused = defaults.bool(forKey: "VectaLocalAIQueuePaused")
+        fastTranscriptionEnabled = (defaults.object(forKey: "VectaFastTranscriptionEnabled") as? Bool) ?? true
         registry = try LocalModelRegistry.load(from: resources.appendingPathComponent("LocalAI/models.json"))
-        manager = try LocalModelManager(registry: registry)
+        manager = try LocalModelManager(registry: registry, root: modelsRoot, makeDownloader: makeDownloader)
         if let data=try? Data(contentsOf:measurementsURL),data.count<1000000 {measurements=(try? JSONDecoder().decode([AIStageMeasurement].self,from:data)) ?? []}
         provider = .local; summaryModel = try store.summaryModel(); automaticSettings = try store.automaticAISettings()
         if !summaryModel.isProductionModel { message=AIProcessingError.retiredModel.localizedDescription }
@@ -149,12 +186,21 @@ import AVFoundation
         resourceManager.onCritical = { [weak self] in
             guard let self else {return}
             self.libraryRuntime?.terminate()
-            if self.activeRequest==nil {Task{await self.closeLibraryRuntime()};return}
+            self.speechRuntime?.terminate()
+            if self.activeRequest==nil {
+                Task {
+                    await self.cancelSpeechWarmup()
+                    await self.closeSpeechRuntime()
+                    await self.closeLibraryRuntime()
+                }
+                return
+            }
             self.resourceInterrupted = true
             self.process?.terminate(); self.operation?.cancel()
         }
         Task {
             await refreshModels()
+            await prewarmSpeechIfEligible()
         }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.poll() }
@@ -176,6 +222,7 @@ import AVFoundation
                 guard let self,!self.stopped else{return};self.startupComplete=true
                 for id in recovered {self.resultUpdates.send(id)}
                 await self.poll()
+                await self.prewarmSpeechIfEligible()
             } catch {self?.message=error.localizedDescription;self?.startupComplete=true}
         }
     }
@@ -196,9 +243,10 @@ import AVFoundation
         guard !refreshingModels else { return }
         refreshingModels = true
         defer { refreshingModels = false }
-        for model in registry.models where downloads[model.id] == nil && !(installingSpeech && LocalModelManager.speechIDs.contains(model.id)) {
+        for model in registry.models where downloads[model.id] == nil && statuses[model.id]?.state != .deleting && !(installingSpeech && LocalModelManager.speechIDs.contains(model.id)) {
             do {
                 _ = try await manager.verify(model.id)
+                guard downloads[model.id] == nil, statuses[model.id]?.state != .deleting else { continue }
                 statuses[model.id] = LocalModelStatus(modelID: model.id, state: .installed, received: model.size, total: model.size, error: nil)
             } catch is CancellationError {
                 // Cancelled optional downloads must not mark unrelated installed
@@ -207,58 +255,148 @@ import AVFoundation
             } catch {
                 let directory = try? await manager.directory(for: model.id)
                 let exists = directory.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+                guard downloads[model.id] == nil, statuses[model.id]?.state != .deleting else { continue }
                 if statuses[model.id]?.state != .failed {
                     statuses[model.id] = LocalModelStatus(modelID: model.id, state: exists ? .damaged : .notInstalled, received: 0, total: model.size, error: nil)
                 }
             }
         }
     }
+    /// Published status is a UI snapshot, not proof that a selected model is absent.
+    /// Acquire through the same pinned manager used by processing; no installation,
+    /// alternate model selection or speech-model requirement is involved.
+    func acquireAnswerModel(_ model: AISummaryModelID) async throws -> URL {
+        guard model.isProductionModel else { throw AIProcessingError.retiredModel }
+        guard model.compatible() else { throw AIProcessingError.invalidRequest }
+        do {
+            let directory = try await manager.acquire(model.rawValue)
+            guard !Task.isCancelled, !stopped else {
+                await manager.release(model.rawValue)
+                throw CancellationError()
+            }
+            let size = registry.models.first(where: { $0.id == model.rawValue })?.size ?? 0
+            statuses[model.rawValue] = LocalModelStatus(modelID: model.rawValue, state: .installed, received: size, total: size, error: nil)
+            return directory
+        } catch is CancellationError { throw CancellationError() }
+        catch LocalModelError.inUse { throw LocalModelError.inUse }
+        catch {
+            let directory = try? await manager.directory(for: model.rawValue)
+            let exists = directory.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+            let size = registry.models.first(where: { $0.id == model.rawValue })?.size ?? 0
+            let message = VL.text("Не удалось открыть выбранную модель «") + model.selectionTitle + VL.text("». Проверьте её состояние в разделе «Локальный ИИ».")
+            statuses[model.rawValue] = LocalModelStatus(modelID: model.rawValue, state: exists ? .damaged : .notInstalled, received: 0, total: size, error: message)
+            throw NSError(domain: "VectaLocalAI", code: 1, userInfo: [NSLocalizedDescriptionKey: message, NSUnderlyingErrorKey: error])
+        }
+    }
+    func modelsNeeded(reuseTranscript: Bool, model: AISummaryModelID? = nil) -> [String] {
+        [(model ?? summaryModel).rawValue] + (reuseTranscript ? [] : LocalModelManager.speechIDs)
+    }
+    func isModelBusy(_ id: String) -> Bool {
+        downloads[id] != nil || [.preparing, .downloading, .verifying, .deleting].contains(statuses[id]?.state)
+    }
+    private func modelsNeeded(for request: AIProcessingRequest) -> [String] {
+        (request.wantsSummary ? [request.selectedSummaryModel.rawValue] : []) +
+            (request.summaryOnly ? [] : ["whisper", "tokenizer"] + (request.wantsDiarization ? ["speaker"] : []))
+    }
     func install(_ id: String) {
-        guard supported, !installingSpeech, registry.models.contains(where:{$0.id==id}), downloads[id] == nil, activeRequest == nil else { return }
-        if let llm=AISummaryModelID(rawValue:id),!llm.compatible() { message=llm.memoryRequirement;return }
+        guard supported, registry.models.contains(where: { $0.id == id }), downloads[id] == nil,
+              statuses[id]?.state != .deleting, !(removingSpeech && LocalModelManager.speechIDs.contains(id)) else { return }
+        let total = registry.models.first(where: { $0.id == id })?.size ?? 0
+        statuses[id] = LocalModelStatus(modelID: id, state: .preparing, received: 0, total: total, error: nil)
+        message = nil
+        if LocalModelManager.speechIDs.contains(id) { installingSpeech = true }
+        let generation = UUID()
+        downloadGenerations[id] = generation
+        downloadSamples[id] = nil; downloadSpeeds[id] = nil
         downloads[id] = Task { [weak self] in
             guard let self else { return }
-            await closeLibraryRuntime()
+            if libraryRuntime?.modelID == id, !libraryAnswerActive { await closeLibraryRuntime() }
             do {
                 try await manager.install(id) { [weak self] status in
-                    Task { @MainActor in self?.statuses[id] = status }
+                    Task { @MainActor in
+                        guard let self, self.downloadGenerations[id] == generation, self.statuses[id]?.state != .deleting else { return }
+                        if status.state == .downloading {
+                            let now = ProcessInfo.processInfo.systemUptime
+                            if let sample = self.downloadSamples[id] {
+                                if now - sample.0 >= 1 {
+                                    self.downloadSpeeds[id] = Double(max(0, status.received - sample.1)) / (now - sample.0)
+                                    self.downloadSamples[id] = (now, status.received)
+                                }
+                            } else { self.downloadSamples[id] = (now, status.received) }
+                        }
+                        self.statuses[id] = status
+                    }
                 }
-            } catch { /* manager already publishes the actual error */ }
+                if statuses[id]?.state != .deleting {
+                    statuses[id] = LocalModelStatus(modelID: id, state: .installed, received: total, total: total, error: nil)
+                    if LocalModelManager.speechIDs.contains(id) { speechWarmupFailures = 0 }
+                }
+            } catch {
+                if statuses[id]?.state != .deleting {
+                    statuses[id] = LocalModelStatus(modelID: id, state: error is CancellationError ? .notInstalled : .failed,
+                        received: 0, total: total, error: error is CancellationError ? nil : error.localizedDescription)
+                }
+            }
+            downloadGenerations[id] = nil; downloadSamples[id] = nil; downloadSpeeds[id] = nil
             downloads[id] = nil
+            installingSpeech = removingSpeech || LocalModelManager.speechIDs.contains { self.downloads[$0] != nil }
+            queueDirty = true
             await refreshModels()
+            await prewarmSpeechIfEligible()
         }
     }
     func installSpeech() {
-        guard supported,!installingSpeech,downloads.isEmpty,activeRequest==nil else {return}
-        installingSpeech=true;message=nil
-        speechDownload=Task { [weak self] in
-            guard let self else {return}
-            await closeLibraryRuntime()
-            do {
-                try await manager.installSpeech { [weak self] status in
-                    Task { @MainActor in self?.statuses[status.modelID]=status }
-                }
-            } catch {if !(error is CancellationError) {message=error.localizedDescription}}
-            installingSpeech=false;speechDownload=nil;await refreshModels()
-        }
+        guard supported, !removingSpeech else { return }
+        for id in LocalModelManager.speechIDs where statuses[id]?.state != .installed { install(id) }
     }
-    func cancelSpeechDownload() {speechDownload?.cancel()}
+    func installAll() {
+        for model in registry.models where statuses[model.id]?.state != .installed { install(model.id) }
+    }
+    func cancelSpeechDownload() { for id in LocalModelManager.speechIDs { cancelDownload(id) } }
     func removeSpeech() {
-        guard !installingSpeech,downloads.isEmpty,activeRequest==nil else {message=LocalModelError.inUse.localizedDescription;return}
-        installingSpeech=true;removingSpeech=true
+        guard !removingSpeech, activeRequest == nil else { message = LocalModelError.inUse.localizedDescription; return }
+        removingSpeech = true; installingSpeech = true
+        let tasks = LocalModelManager.speechIDs.compactMap { downloads[$0] }
+        for task in tasks { task.cancel() }
+        for id in LocalModelManager.speechIDs { statuses[id]?.state = .deleting }
         Task {
-            do {for id in LocalModelManager.speechIDs {try await manager.remove(id)}} catch {message=error.localizedDescription}
-            installingSpeech=false;removingSpeech=false;await refreshModels()
+            for task in tasks { await task.value }
+            await cancelSpeechWarmup()
+            await closeSpeechRuntime()
+            for id in LocalModelManager.speechIDs {
+                do {
+                    try await manager.remove(id)
+                    statuses[id] = LocalModelStatus(modelID: id, state: .notInstalled, received: 0,
+                        total: registry.models.first(where: { $0.id == id })?.size ?? 0, error: nil)
+                } catch { statuses[id]?.state = .failed; statuses[id]?.error = error.localizedDescription; message = error.localizedDescription }
+            }
+            installingSpeech = false; removingSpeech = false; queueDirty = true
+            await refreshModels()
         }
     }
     func cancelDownload(_ id: String) { downloads[id]?.cancel() }
     func remove(_ id: String) {
-        guard !installingSpeech,downloads[id] == nil, activeRequest == nil else { message = LocalModelError.inUse.localizedDescription; return }
+        guard registry.models.contains(where: { $0.id == id }), statuses[id]?.state != .deleting,
+              activeRequest == nil, !(removingSpeech && LocalModelManager.speechIDs.contains(id)) else {
+            message = LocalModelError.inUse.localizedDescription; return
+        }
+        let download = downloads[id]
+        download?.cancel()
         statuses[id]?.state = .deleting
         Task {
-            await closeLibraryRuntime()
-            do { try await manager.remove(id); await refreshModels() }
-            catch { message = error.localizedDescription; await refreshModels() }
+            await download?.value
+            if LocalModelManager.speechIDs.contains(id) {
+                await cancelSpeechWarmup()
+                await closeSpeechRuntime()
+            }
+            if libraryRuntime?.modelID == id { await closeLibraryRuntime() }
+            do {
+                try await manager.remove(id)
+                statuses[id] = LocalModelStatus(modelID: id, state: .notInstalled, received: 0,
+                    total: registry.models.first(where: { $0.id == id })?.size ?? 0, error: nil)
+            } catch { statuses[id]?.state = .failed; statuses[id]?.error = error.localizedDescription; message = error.localizedDescription }
+            queueDirty = true
+            await refreshModels()
         }
     }
     func showSettings() {
@@ -296,10 +434,22 @@ import AVFoundation
             queueDirty=false;lastQueueScan=now
             if let request=try await mailbox.nextRequest(root:root) {
                 guard !stopped,operation==nil,activeRequest==nil,libraryWaitingCount==0,!queuePaused else{return}
+                if modelsNeeded(for: request).contains(where: isModelBusy) {
+                    queueDirty = true
+                    message = VL.text("Запрос сохранён. Обработка начнётся после установки необходимых моделей.")
+                    return
+                }
                 if libraryRuntime != nil {queueDirty=true;Task{await closeLibraryRuntime()};return}
+                if speechWarmup != nil {
+                    await cancelSpeechWarmup()
+                    queueDirty = true
+                    return
+                }
                 guard try resourceManager.acquire() else{queueDirty=true;message=VL.text("Очередь ожидает освобождения локальной модели другим экземпляром Vecta.");return}
                 resourceInterrupted=false;message=nil;activeRequest=request.id
                 operation=Task{await run(request);resourceManager.release();activeRequest=nil;operation=nil;queueDirty=true}
+            } else {
+                Task { [weak self] in await self?.prewarmSpeechIfEligible() }
             }
         } catch {if message != error.localizedDescription{message=error.localizedDescription}}
     }
@@ -311,17 +461,17 @@ import AVFoundation
             transcript: nil, segments: [], summary: nil, error: nil, updatedAt: Date(), duration: nil, recognitionSeconds: nil, summarySeconds: nil)
         do {
             guard supported else { throw NSError(domain: "LocalAI", code: 15, userInfo: [NSLocalizedDescriptionKey: VL.text("Локальный AI требует macOS 15 или новее.")]) }
-            guard downloads.isEmpty,!installingSpeech else { throw AIProcessingError.modelsMissing }
             try request.validate()
             guard request.selectedSummaryModel.isProductionModel else {throw AIProcessingError.retiredModel}
             // A checkpoint recovery must not teach fresh-job ETA that a full
             // recording takes only the remaining fraction of inference time.
             let speechCache=request.speechCheckpointURL(for:store.resultURL(request.id))
+            try store.registerArtifact(speechCache, for: request.id)
             if FileManager.default.fileExists(atPath:speechCache.path) {
                 resumedTimingStages[request.id]=[.loadingRecognition,.recognizing]
             }
-            guard request.selectedSummaryModel.compatible() else { throw NSError(domain:"Vecta",code:16,userInfo:[NSLocalizedDescriptionKey:request.selectedSummaryModel.memoryRequirement]) }
-            if !request.summaryOnly { _ = try await manager.verify(request.selectedSummaryModel.rawValue) }
+            guard !request.wantsSummary || request.selectedSummaryModel.compatible() else { throw NSError(domain:"Vecta",code:16,userInfo:[NSLocalizedDescriptionKey:request.selectedSummaryModel.memoryRequirement]) }
+            if !request.summaryOnly && request.wantsSummary { _ = try await manager.verify(request.selectedSummaryModel.rawValue) }
             if FileManager.default.fileExists(atPath: store.cancelURL(request.id).path) { throw CancellationError() }
             if request.summaryOnly {
                 guard let sourceID = request.transcriptRequestID, let source = try store.result(sourceID),
@@ -331,7 +481,7 @@ import AVFoundation
                 result.recognitionSeconds = source.recognitionSeconds; result.unmatchedText = source.unmatchedText
             } else {
                 var speechModels: [String:URL] = [:]
-                let speechIDs = ["whisper", "speaker", "tokenizer"]
+                let speechIDs = ["whisper", "tokenizer"] + (request.wantsDiarization ? ["speaker"] : [])
                 do {
                     for id in speechIDs { speechModels[id] = try await manager.acquire(id) }
                     let audio = root.appendingPathComponent("Inbox").appendingPathComponent(request.audioFilename)
@@ -341,14 +491,25 @@ import AVFoundation
                     guard attributes.isRegularFile == true, attributes.isSymbolicLink != true else { throw AIProcessingError.invalidRequest }
                     let file = LocalModelFile(name: request.audioFilename, url: audio, sha256: request.audioSHA256, size: Int64(attributes.fileSize ?? 0))
                     try await Task.detached { try LocalModelIntegrity.verify(file, at: audio) }.value
-                    _ = try await execute(resources.appendingPathComponent("LocalAI/VectaSpeech"),
-                        arguments: [store.requestURL(request.id).path, audio.path, speechModels["whisper"]!.path, speechModels["speaker"]!.path, speechModels["tokenizer"]!.path, store.resultURL(request.id).path])
+                    if fastTranscriptionEnabled {
+                        try await recognizeWithPersistentSpeech(request: request, audio: audio,
+                            whisper: speechModels["whisper"]!, speaker: speechModels["speaker"],
+                            tokenizer: speechModels["tokenizer"]!, output: store.resultURL(request.id))
+                    } else {
+                        _ = try await execute(resources.appendingPathComponent("LocalAI/VectaSpeech"),
+                            arguments: [store.requestURL(request.id).path, audio.path, speechModels["whisper"]!.path, speechModels["speaker"]?.path ?? "", speechModels["tokenizer"]!.path, store.resultURL(request.id).path])
+                    }
                     let decoded=try JSONDecoder().decode(AIProcessingResult.self,from:Data(contentsOf:store.resultURL(request.id)))
                     result=try AISpeechResultAcceptance.accept(decoded,request:request,duration:audioDuration)
                     for id in speechModels.keys { await manager.release(id) }
                 } catch { for id in speechModels.keys { await manager.release(id) }; throw error }
             }
             try Task.checkCancellation()
+            if !request.wantsSummary {
+                result.stage = .completed; result.error = nil; result.updatedAt = Date()
+                observeProgress(result); result.processingProgress = processingProgress[request.id]
+                try persistResult(result); return
+            }
             result.stage = .loadingSummary; result.updatedAt = Date(); observeProgress(result); try persistResult(result)
             let summaryID = request.selectedSummaryModel.rawValue
             let qwen = try await manager.acquire(summaryID)
@@ -373,6 +534,7 @@ import AVFoundation
                 let key=SHA256.hash(data:data+Data(definition.revision.utf8)).map { String(format:"%02x",$0) }.joined()
                 let checkpoint=checkpoints.appendingPathComponent(key+".json")
                 summaryCheckpoint=checkpoint
+                try store.registerArtifact(checkpoint, for: request.id)
                 if FileManager.default.fileExists(atPath:checkpoint.path) {resumedTimingStages[request.id,default:[]].insert(.summarizing)}
                 let response = try await execute(resources.appendingPathComponent("LocalAI/VectaMLX"), arguments: [qwen.path,checkpoint.path], input: data)
                 let decoded = try AITextSummaryRecovery.decode(response,speakerIDs:Set(corrected.compactMap(\.resolvedSpeakerID)))
@@ -420,17 +582,17 @@ import AVFoundation
     /// Uses the same worker, manager, pressure gate and cross-process lease as summaries.
     /// Freeze the shared model before awaiting; settings cannot reroute a running answer.
     func answer(question:String,segments:[AISpeechSegment],history:[AIChatMessage],onDraft:((String)->Void)? = nil) async throws -> AIStructuredSummary {
-        guard supported,activeRequest==nil,operation==nil,downloads.isEmpty,!installingSpeech else {throw AIProcessingError.busy}
+        guard supported,activeRequest==nil,operation==nil,!isModelBusy(summaryModel.rawValue) else {throw AIProcessingError.busy}
+        await cancelSpeechWarmup()
         await closeLibraryRuntime()
         guard activeRequest==nil,operation==nil else {throw AIProcessingError.busy}
         guard !question.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,question.count<=2000,!segments.isEmpty else {throw AIProcessingError.invalidRequest}
-        let modelID=summaryModel.rawValue
-        guard statuses[modelID]?.state == .installed else {throw AIProcessingError.modelsMissing}
+        let model=summaryModel,modelID=model.rawValue
         guard try resourceManager.acquire() else {throw AIProcessingError.busy}
         activeRequest=UUID();resourceInterrupted=false;draftHandler=onDraft
         defer {activeRequest=nil;draftHandler=nil;resourceManager.release()}
         do {
-            let directory=try await manager.acquire(modelID)
+            let directory=try await acquireAnswerModel(model)
             guard let definition=registry.models.first(where:{$0.id==modelID}),definition.backend == "mlx" else {throw AIProcessingError.modelsMissing}
             let conservative=ProcessInfo.processInfo.physicalMemory < 16*1_073_741_824
             let selected=AITranscriptRetrieval.select(segments,question:question,characterBudget:conservative ? 3500:9000)
@@ -447,7 +609,8 @@ import AVFoundation
     /// Retries only the optional renderer input stage; saved speech and text stay intact.
     var hasActiveWorker:Bool {process?.isRunning == true}
     func retryVisual(_ id:UUID) async throws {
-        guard supported,activeRequest==nil,operation==nil,downloads.isEmpty,!installingSpeech else {throw AIProcessingError.busy}
+        guard supported,activeRequest==nil,operation==nil,!isModelBusy(summaryModel.rawValue) else {throw AIProcessingError.busy}
+        await cancelSpeechWarmup()
         await closeLibraryRuntime()
         guard activeRequest==nil,operation==nil else {throw AIProcessingError.busy}
         guard var result=try store.result(id),result.summary != nil else {throw AIProcessingError.invalidSummary}
@@ -499,6 +662,7 @@ import AVFoundation
             let directory=root.appendingPathComponent("LocalAI/WorkerEvents",isDirectory:true)
             try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true,attributes:[.posixPermissions:0o700])
             let file=directory.appendingPathComponent(UUID().uuidString+".json");workerEventURL=file
+            if let id = visualOnlyID ?? activeRequest { try store.registerArtifact(file, for: id) }
             if executable.lastPathComponent == "VectaMLX" {
                 if workerArguments.count==1 {workerArguments.append("")};workerArguments.append(file.path)
             }
@@ -563,14 +727,171 @@ import AVFoundation
     }
     func stop() {
         stopped = true; timer?.invalidate();queueWatcher?.cancel();queueWatcher=nil
-        speechDownload?.cancel()
         for download in downloads.values { download.cancel() }
         operation?.cancel(); if process?.isRunning == true { process?.terminate() }
-        libraryIdleTask?.cancel();libraryRuntime?.terminate();Task{await closeLibraryRuntime()}
+        speechWarmup?.cancel(); speechRuntime?.terminate()
+        libraryIdleTask?.cancel(); libraryRuntime?.terminate()
+        Task {
+            await cancelSpeechWarmup()
+            await closeSpeechRuntime()
+            await closeLibraryRuntime()
+        }
     }
 }
 
 @MainActor extension LocalAIHost {
+    private func prewarmSpeechIfEligible() async {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
+              ProcessInfo.processInfo.environment["VECTA_VERIFICATION_PREFERENCES"] == nil,
+              !CommandLine.arguments.contains(where: { $0.hasPrefix("--verify-") }),
+              startupComplete, speechWarmupFailures < 2, fastTranscriptionEnabled, !stopped, activeRequest == nil, operation == nil,
+              libraryWaitingCount == 0, speechRuntime == nil, speechRuntimeClosing == nil,
+              speechWarmup == nil,
+              statuses["whisper"]?.state == .installed,
+              statuses["tokenizer"]?.state == .installed else { return }
+        let identity = UUID()
+        let warmup = Task { [weak self] in
+            guard let self else { return }
+            await self.warmSpeechRuntime()
+        }
+        speechWarmupID = identity; speechWarmup = warmup
+        await warmup.value
+        if speechWarmupID == identity { speechWarmup = nil; speechWarmupID = nil }
+    }
+
+    private func warmSpeechRuntime() async {
+        guard fastTranscriptionEnabled, !stopped, activeRequest == nil, operation == nil,
+              libraryWaitingCount == 0, speechRuntime == nil,
+              statuses["whisper"]?.state == .installed,
+              statuses["tokenizer"]?.state == .installed else { return }
+        guard (try? resourceManager.acquire()) == true else { return }
+        var modelIDs: [String] = []
+        var worker: LocalAISpeechWorker?
+        do {
+            let whisper = try await manager.acquire("whisper")
+            modelIDs.append("whisper")
+            let tokenizer = try await manager.acquire("tokenizer")
+            modelIDs.append("tokenizer")
+            try Task.checkCancellation()
+            guard fastTranscriptionEnabled, !stopped, activeRequest == nil, operation == nil,
+                  libraryWaitingCount == 0 else { throw CancellationError() }
+            let runtime = try LocalAISpeechWorker(
+                executable: resources.appendingPathComponent("LocalAI/VectaSpeech"),
+                eventsRoot: root.appendingPathComponent("LocalAI/WorkerEvents", isDirectory: true))
+            worker = runtime
+            speechRuntime = runtime
+            process = runtime.process
+            try await runtime.warm(whisper: whisper, tokenizer: tokenizer, remainingWindows: 4)
+            try Task.checkCancellation()
+            try await runtime.warm(whisper: whisper, tokenizer: tokenizer, remainingWindows: 1)
+            try Task.checkCancellation()
+            speechWarmupFailures = 0
+            if process === runtime.process { process = nil }
+            for id in modelIDs { await manager.release(id) }
+            resourceManager.release()
+        } catch {
+            if !(error is CancellationError), !Task.isCancelled { speechWarmupFailures += 1 }
+            worker?.terminate()
+            if let worker {
+                if speechRuntime === worker { speechRuntime = nil }
+                if process === worker.process { process = nil }
+                await worker.stop()
+            }
+            for id in modelIDs { await manager.release(id) }
+            resourceManager.release()
+        }
+    }
+
+    private func cancelSpeechWarmup() async {
+        guard let warmup = speechWarmup else { return }
+        let identity = speechWarmupID
+        warmup.cancel()
+        speechRuntime?.terminate()
+        await warmup.value
+        if speechWarmupID == identity { speechWarmup = nil; speechWarmupID = nil }
+    }
+
+    private func closeSpeechRuntime() async {
+        if speechRequestActive {
+            closeSpeechAfterActive = true
+            return
+        }
+        if let closing = speechRuntimeClosing {
+            await closing.value
+            return
+        }
+        guard let worker = speechRuntime else { return }
+        speechRuntime = nil
+        worker.terminate()
+        let closing = Task {
+            await worker.stop()
+        }
+        speechRuntimeClosing = closing
+        await closing.value
+        if process === worker.process { process = nil }
+        speechRuntimeClosing = nil
+        closeSpeechAfterActive = false
+    }
+
+    private func recognizeWithPersistentSpeech(request: AIProcessingRequest, audio: URL,
+                                               whisper: URL, speaker: URL?, tokenizer: URL,
+                                               output: URL) async throws {
+        if let closing = speechRuntimeClosing { await closing.value }
+        let worker: LocalAISpeechWorker
+        if let existing = speechRuntime, existing.process.isRunning {
+            worker = existing
+        } else {
+            if let existing = speechRuntime {
+                speechRuntime = nil
+                existing.terminate()
+                await existing.stop()
+            }
+            worker = try LocalAISpeechWorker(
+                executable: resources.appendingPathComponent("LocalAI/VectaSpeech"),
+                eventsRoot: root.appendingPathComponent("LocalAI/WorkerEvents", isDirectory: true))
+            speechRuntime = worker
+        }
+        let eventURL = root.appendingPathComponent("LocalAI/WorkerEvents", isDirectory: true).appendingPathComponent(UUID().uuidString + ".json")
+        try store.registerArtifact(eventURL, for: request.id)
+        workerEventURL = eventURL
+        lastWorkerDraft = nil
+        lastSemanticRevision = nil
+        speechRequestActive = true
+        process = worker.process
+        do {
+            try await worker.recognize(request: store.requestURL(request.id), audio: audio,
+                                       whisper: whisper, speaker: speaker, tokenizer: tokenizer,
+                                       output: output, eventURL: eventURL)
+            try Task.checkCancellation()
+            try await worker.unload()
+        } catch {
+            worker.terminate()
+            if speechRuntime === worker { speechRuntime = nil }
+            if process === worker.process { process = nil }
+            if workerEventURL == eventURL {
+                workerEventURL = nil
+                lastWorkerDraft = nil
+                lastSemanticRevision = nil
+            }
+            try? FileManager.default.removeItem(at: eventURL)
+            speechRequestActive = false
+            closeSpeechAfterActive = false
+            await worker.stop()
+            throw error
+        }
+        speechRequestActive = false
+        if process === worker.process { process = nil }
+        if workerEventURL == eventURL {
+            workerEventURL = nil
+            lastWorkerDraft = nil
+            lastSemanticRevision = nil
+        }
+        try? FileManager.default.removeItem(at: eventURL)
+        if closeSpeechAfterActive || !fastTranscriptionEnabled || stopped {
+            await closeSpeechRuntime()
+        }
+    }
+
     private func closeLibraryRuntime() async {
         libraryIdleTask?.cancel();libraryIdleTask=nil
         if let closing=libraryRuntimeClosing {await closing.value;return}
@@ -590,12 +911,12 @@ import AVFoundation
         func phase(_ value:String) {if value != lastPhase {lastPhase=value;onPhase(value)}}
         libraryWaitingCount+=1
         defer {libraryWaitingCount-=1}
-        while activeRequest != nil || operation != nil || !downloads.isEmpty || installingSpeech || libraryRuntimeClosing != nil {
+        await cancelSpeechWarmup()
+        while activeRequest != nil || operation != nil || isModelBusy(model.rawValue) || libraryRuntimeClosing != nil {
             try Task.checkCancellation();guard !stopped else {throw CancellationError()}
             phase(VL.text("Ожидаем завершения обработки…"));try await Task.sleep(nanoseconds:200_000_000)
         }
         try Task.checkCancellation()
-        guard statuses[model.rawValue]?.state == .installed else {throw AIProcessingError.modelsMissing}
         let id=UUID();libraryAnswerActive=true;activeRequest=id
         defer {libraryAnswerActive=false;if activeRequest==id {activeRequest=nil}}
         libraryIdleTask?.cancel();libraryIdleTask=nil
@@ -609,7 +930,7 @@ import AVFoundation
                 }
                 phase(VL.text("Загружаем выбранную модель…"))
                 do {
-                    let directory=try await manager.acquire(model.rawValue)
+                    let directory=try await acquireAnswerModel(model)
                     guard registry.models.first(where:{$0.id==model.rawValue})?.backend=="mlx" else {await manager.release(model.rawValue);throw AIProcessingError.modelsMissing}
                     libraryRuntime=try LocalAIWarmWorker(modelID:model.rawValue,executable:resources.appendingPathComponent("LocalAI/VectaMLX"),directory:directory,root:root)
                 } catch {await manager.release(model.rawValue);resourceManager.release();throw error}

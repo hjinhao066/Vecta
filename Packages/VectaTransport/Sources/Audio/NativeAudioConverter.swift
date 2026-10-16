@@ -9,6 +9,8 @@ public struct NativeAudioConversion: Equatable {
     public let decodedSamples: Int64
     public let sampleRate: Int
     public let channels: Int
+    public let concealedPackets: Int
+    public var recorderHighlightSeconds: [Double]? = nil
 }
 
 /// Native Opus -> PCM -> MP3, statically linked to pinned libopus and LAME.
@@ -46,12 +48,14 @@ public enum NativeAudioConverter {
             if errno==EEXIST {throw NativeAudioError.outputExists}
             throw NSError(domain:NSPOSIXErrorDomain,code:Int(errno))
         }
-        return .init(outputURL:outputURL,duration:info.duration,decodedSamples:written,sampleRate:Int(rate),channels:Int(channels))
+        return .init(outputURL:outputURL,duration:info.duration,decodedSamples:written,sampleRate:Int(rate),channels:Int(channels),concealedPackets:0)
     }
     public static func convert(rawURL: URL, outputURL: URL, channels: Int,
                                expectedDuration: Double? = nil,
                                privateKey: PartnerRSAKey? = nil,
-                               contentDecryptor: ((Data) throws -> Data)? = nil) throws -> NativeAudioConversion {
+                               contentDecryptor: ((Data) throws -> Data)? = nil,
+                               recoverDamagedRecorderPackets: Bool = false,
+                               readRecorderHighlights: Bool = false) throws -> NativeAudioConversion {
         guard channels == 1 || channels == 2 else { throw NativeAudioError.unsupportedChannels }
         guard rawURL.isFileURL, outputURL.isFileURL, rawURL != outputURL else { throw NativeAudioError.invalidHeader }
         let raw = try FileHandle(forReadingFrom: rawURL)
@@ -61,6 +65,7 @@ public enum NativeAudioConverter {
         var prepared: URL?
         defer { if let prepared { try? FileManager.default.removeItem(at: prepared) } }
         var input = raw
+        var highlightFormat = false
         if EncryptedAudioHeader.isEncrypted(prefix) || contentDecryptor != nil {
             // Modern file AEAD has one whole-file tag. Bound the read before
             // loading it; reject giant/unbounded data rather than allocate it.
@@ -72,6 +77,7 @@ public enum NativeAudioConverter {
             if EncryptedAudioHeader.isEncrypted(prefix) {
                 guard let privateKey else { throw NativeAudioError.encryptedFileRequiresKey }
                 let header = try EncryptedAudioHeader(data: prefix)
+                highlightFormat = readRecorderHighlights && RecorderHighlightFrames.supports(header)
                 guard header.channels == channels else { throw NativeAudioError.invalidHeader }
                 bytes = try header.decrypt(Data(all.dropFirst(512)), privateKey: privateKey)
             } else { bytes = try contentDecryptor!(all) }
@@ -94,6 +100,8 @@ public enum NativeAudioConverter {
         var pcm = [Int16](repeating: 0, count: capacity * channels)
         var encoded = [UInt8](repeating: 0, count: 32_768)
         var total: Int64 = 0, written: Int64 = 0
+        var packetCount = 0, concealedPackets = 0, consecutiveConcealed = 0
+        var highlights: [Double] = []
         var skip = reader?.skipSamples ?? 0
         while true {
             try Task.checkCancellation()
@@ -107,10 +115,23 @@ public enum NativeAudioConverter {
                     packet = bytes
                 }
             }
-            guard let packet else { break }
-            let count = packet.withUnsafeBytes { p in
+            guard var packet else { break }
+            if highlightFormat, !ogg, RecorderHighlightFrames.normalize(&packet) {
+                highlights.append(Double(packetCount) * 0.02)
+            }
+            packetCount += 1
+            var count = packet.withUnsafeBytes { p in
                 op_audio_decode(codec, p.bindMemory(to: UInt8.self).baseAddress, Int32(packet.count), &pcm, Int32(capacity))
             }
+            // Authenticated recorder files can contain isolated malformed Opus
+            // packets. Conceal only INVALID_PACKET (-4), after valid audio, in
+            // the fixed 20ms format. Imports/Ogg remain strict. Never shift time
+            // by skipping bytes or accept a wrong key/format as recovered audio.
+            if count == -4, recoverDamagedRecorderPackets, !ogg, written > 0 {
+                guard consecutiveConcealed < 2 else { throw NativeAudioError.malformedOpus }
+                count = op_audio_conceal(codec, &pcm, 320)
+                concealedPackets += 1; consecutiveConcealed += 1
+            } else { consecutiveConcealed = 0 }
             guard count > 0, ogg || count == 320 else { throw NativeAudioError.codecFailure(count) }
             if let reader,reader.outputGain != 1 {
                 for index in 0..<(Int(count)*channels) {pcm[index]=Int16(max(-32768,min(32767,Double(pcm[index])*reader.outputGain)))}
@@ -132,6 +153,8 @@ public enum NativeAudioConverter {
             written += Int64(usable)
         }
         guard written > 0, skip == 0 else { throw NativeAudioError.incompleteAudio }
+        // At most 1% damage in a complete file; never publish widespread damage.
+        guard concealedPackets * 100 <= packetCount else { throw NativeAudioError.malformedOpus }
         // A final Ogg granule may trim encoder padding. Require consistency;
         // legacy fixed Opus has exactly 20ms per packet and no padding fields.
         if let reader, let granule = reader.finalGranule {
@@ -153,7 +176,8 @@ public enum NativeAudioConverter {
             throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
         }
         return NativeAudioConversion(outputURL: outputURL, duration: duration,
-                                     decodedSamples: written, sampleRate: sampleRate, channels: channels)
+                                     decodedSamples: written, sampleRate: sampleRate, channels: channels,
+                                     concealedPackets: concealedPackets, recorderHighlightSeconds: highlightFormat && !ogg ? highlights : nil)
     }
 }
 

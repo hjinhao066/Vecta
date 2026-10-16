@@ -7,7 +7,7 @@ trap 'rm -rf "$build"' EXIT
 sources=(
   Domain/VectaLocalization.swift
   Domain/AIProcessing.swift Domain/VectaSummaryModels.swift Domain/LocalAIFileStore.swift
-  Domain/AILibrarySearch.swift AI/Local/LocalAIWarmWorker.swift AI/Local/LocalAIResourceManager.swift
+  Domain/AILibrarySearch.swift AI/Local/LocalAIWarmWorker.swift AI/Local/LocalAISpeechWorker.swift AI/Local/LocalAIResourceManager.swift
   AI/Local/LocalModelRegistry.swift AI/Local/LocalModelDownloader.swift AI/Local/LocalModelManager.swift
   AI/Host/LocalAIHost.swift App/VectaMigration.swift App/VectaAuthorization.swift
   App/NativeStorageLayout.swift App/NativeCompatibility.swift Storage/VectaRecordingStore.swift

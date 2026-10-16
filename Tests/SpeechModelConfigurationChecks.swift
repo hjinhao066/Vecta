@@ -10,6 +10,7 @@ import WhisperKit
         for remaining in [-1,0,1,2,3,4,20,Int.max] {
             let gpu=(1...3).contains(remaining)
             precondition(VectaSpeechModelConfiguration.usesGPUEncoder(remainingWindows:remaining)==gpu);checks+=1
+            precondition(VectaSpeechModelConfiguration.supportsWarm(remainingWindows:remaining)==(1...32_768).contains(remaining));checks+=1
             let configuration=VectaSpeechModelConfiguration.make(modelFolder:folder,tokenizerFolder:tokenizer,remainingWindows:remaining)
             precondition(configuration.modelFolder==folder && configuration.tokenizerFolder==tokenizer);checks+=1
             precondition(configuration.prewarm==false && configuration.load==false && !configuration.download);checks+=1
@@ -25,6 +26,6 @@ import WhisperKit
             precondition(decoding.wordTimestamps==legacy.wordTimestamps);checks+=1
             precondition(decoding.concurrentWorkerCount==legacy.concurrentWorkerCount);checks+=1
         }
-        print("PASS \(checks) speech model configuration checks: bounded GPU encoder, SDK defaults, historical forced Russian, bilingual automatic detection and unchanged decoding quality. No inference or models loaded.")
+        print("PASS \(checks) speech model configuration checks: bounded warm inputs, bounded GPU encoder, SDK defaults, historical forced Russian, bilingual automatic detection and unchanged decoding quality. No inference or models loaded.")
     }
 }

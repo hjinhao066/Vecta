@@ -150,6 +150,25 @@ struct LocalAIFileStore {
         let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
         guard values.isRegularFile == true, values.isSymbolicLink != true, (values.fileSize ?? 0) < 32_000 else { throw AIProcessingError.invalidRequest }
     }
+    func artifactOwnershipURL(_ id: UUID) -> URL { local.appendingPathComponent("ArtifactOwnership/" + id.uuidString.lowercased() + ".json") }
+    func registerArtifact(_ artifact: URL, for id: UUID) throws {
+        guard FileManager.default.fileExists(atPath: requestURL(id).path) else { return }
+        let prefix = root.standardizedFileURL.path + "/"
+        guard artifact.standardizedFileURL.path.hasPrefix(prefix) else { throw AIProcessingError.invalidRequest }
+        let relative = String(artifact.standardizedFileURL.path.dropFirst(prefix.count))
+        guard ["LocalAI/WorkerEvents/", "LocalAI/SummaryCheckpoints/", "LocalAI/Results/"].contains(where: relative.hasPrefix),
+              !relative.split(separator: "/").contains("..") else { throw AIProcessingError.invalidRequest }
+        let url = artifactOwnershipURL(id), folder = url.deletingLastPathComponent()
+        if FileManager.default.fileExists(atPath: folder.path) {
+            guard try folder.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]).isDirectory == true,
+                  try folder.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else { throw AIProcessingError.invalidRequest }
+        } else { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700]) }
+        var files: [String] = []
+        if FileManager.default.fileExists(atPath: url.path) { try validateSmallFile(url); files = try JSONDecoder().decode([String].self, from: Data(contentsOf: url)) }
+        if !files.contains(relative) { files.append(relative) }
+        guard files.count <= 128 else { throw AIProcessingError.invalidRequest }
+        try write(files, to: url)
+    }
     func requestURL(_ id: UUID) -> URL { local.appendingPathComponent("Requests/\(id.uuidString.lowercased()).json") }
     func resultURL(_ id: UUID) -> URL { local.appendingPathComponent("Results/\(id.uuidString.lowercased()).json") }
     func cancelURL(_ id: UUID) -> URL { local.appendingPathComponent("Requests/\(id.uuidString.lowercased()).cancel") }

@@ -48,7 +48,8 @@ def check(heavy=False):
     for script in ('Tools/test-core.sh', 'Tests/run-speaker-identity-checks.sh',
                    'Tests/run-native-runtime-checks.sh', 'Tests/run-localization-checks.sh',
                    'Tests/run-prompt-language-checks.sh', 'Tests/run-local-ai-event-cache-checks.sh',
-                   'Tests/run-legacy-model-checks.sh'):
+                   'Tests/run-fast-transcription-checks.sh', 'Tests/run-application-settings-checks.sh',
+                   'Tests/run-legacy-model-checks.sh', 'Tests/run-mac-recording-checks.sh', 'Tests/run-model-download-checks.sh'):
         run('bash', ROOT/script)
     if heavy:
         fixture = ROOT/'.build'/('native-app-checks-'+uuid.uuid4().hex)

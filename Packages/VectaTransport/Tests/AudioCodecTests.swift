@@ -36,6 +36,79 @@ final class AudioCodecTests: XCTestCase {
         let permissions = try FileManager.default.attributesOfItem(atPath: output.path)[.posixPermissions] as? Int
         XCTAssertEqual(permissions, 0o600)
     }
+    func testRecorderRecoveryConcealsIsolatedPacketsWithoutShorteningAudio() throws {
+        let dir = try temporary(), raw = dir.appendingPathComponent("recorder.raw"), output = dir.appendingPathComponent("recorder.mp3")
+        var damaged = Data()
+        for _ in 0..<7 { damaged.append(try fixture()) }
+        // Same geometry as the observed recorder failure: two invalid 80-byte
+        // packets in 350 frames. No owner recording is retained as a fixture.
+        damaged[218 * 80] = 0xb9; damaged[280 * 80] = 0xb9
+        try damaged.write(to: raw)
+        XCTAssertThrowsError(try NativeAudioConverter.convert(rawURL: raw, outputURL: output, channels: 1))
+        let value = try NativeAudioConverter.convert(rawURL: raw, outputURL: output, channels: 1,
+            expectedDuration: 7, recoverDamagedRecorderPackets: true)
+        XCTAssertEqual(value.concealedPackets, 2)
+        XCTAssertEqual(value.decodedSamples, 112000)
+        XCTAssertEqual(value.duration, 7, accuracy: 0.0001)
+        XCTAssertGreaterThan(try AVAudioFile(forReading: output).length, 110000)
+        XCTAssertEqual(try Data(contentsOf: raw), damaged)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.path).count, 2)
+    }
+    func testRecorderRecoveryRejectsLeadingDenseBurstAndTruncatedDamage() throws {
+        let dir = try temporary(), raw = dir.appendingPathComponent("recorder.raw"), output = dir.appendingPathComponent("recorder.mp3")
+        var source = Data()
+        for _ in 0..<7 { source.append(try fixture()) }
+        for indices in [[0], [10, 11, 12], [10, 30, 50, 70]] {
+            var damaged = source
+            for index in indices { damaged[index * 80] = 0xb9 }
+            try damaged.write(to: raw)
+            XCTAssertThrowsError(try NativeAudioConverter.convert(rawURL: raw, outputURL: output,
+                channels: 1, recoverDamagedRecorderPackets: true))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+            XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.path), ["recorder.raw"])
+        }
+        try source.dropLast().write(to: raw)
+        XCTAssertThrowsError(try NativeAudioConverter.convert(rawURL: raw, outputURL: output,
+            channels: 1, recoverDamagedRecorderPackets: true))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+    }
+    func testRecorderRecoveryKeepsCleanAudioAndOggStrict() throws {
+        let dir = try temporary(), raw = dir.appendingPathComponent("recorder.raw"), output = dir.appendingPathComponent("recorder.mp3")
+        try fixture().write(to: raw)
+        let value = try NativeAudioConverter.convert(rawURL: raw, outputURL: output, channels: 1,
+            recoverDamagedRecorderPackets: true)
+        XCTAssertEqual(value.concealedPackets, 0)
+        XCTAssertEqual(value.decodedSamples, 16000)
+        let ogg = dir.appendingPathComponent("damaged.ogg"), rejected = dir.appendingPathComponent("rejected.mp3")
+        var bytes = try fixture(ogg: true); bytes[bytes.count - 2] ^= 1
+        try bytes.write(to: ogg)
+        XCTAssertThrowsError(try NativeAudioConverter.convert(rawURL: ogg, outputURL: rejected,
+            channels: 1, recoverDamagedRecorderPackets: true))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: rejected.path))
+    }
+    func testScopedRecorderHighlightFrameRestoresOriginalCodecPacket() throws {
+        let original = try fixture()
+        var flagged = original.subdata(in: 0..<80)
+        flagged[0] = 0xb8
+        let before = flagged
+        flagged[0] = 0xb9
+        XCTAssertTrue(RecorderHighlightFrames.normalize(&flagged))
+        XCTAssertEqual(flagged, before, "Only the recorder flag may change")
+        XCTAssertFalse(RecorderHighlightFrames.normalize(&flagged))
+        var unknown = Data(repeating: 0xff, count: 80)
+        XCTAssertFalse(RecorderHighlightFrames.normalize(&unknown))
+        var short = Data([0xb9])
+        XCTAssertFalse(RecorderHighlightFrames.normalize(&short))
+        var header = Data(repeating: 0, count: 512)
+        header.replaceSubrange(0..<8, with: Data("PLAUD.AI".utf8))
+        header[8] = 1; header[11] = 2; header[48] = 5; header[50] = 1; header[52] = 1; header[144] = 80
+        XCTAssertTrue(RecorderHighlightFrames.supports(try EncryptedAudioHeader(data: header)))
+        for offset in [8,48,50,52,144] {
+            var wrong = header; wrong[offset] = 9
+            XCTAssertFalse(RecorderHighlightFrames.supports(try EncryptedAudioHeader(data: wrong)))
+        }
+    }
+
     func testNeverOverwritesExistingOutput() throws {
         let dir = try temporary(), raw = dir.appendingPathComponent("tone.raw"), output = dir.appendingPathComponent("existing.mp3")
         try fixture().write(to: raw); try Data("preserve".utf8).write(to: output)

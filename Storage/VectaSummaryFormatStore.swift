@@ -79,14 +79,6 @@ final class VectaSummaryFormatStore {
         return ordered(document.entries.filter { $0.deletedAt == nil }).map(\.format)
     }
 
-    var deleted: [VectaSummaryInterpretation] {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return document.entries.filter { $0.deletedAt != nil }.sorted {
-            $0.deletedAt == $1.deletedAt ? $0.format.id < $1.format.id : $0.deletedAt! > $1.deletedAt!
-        }.map(\.format)
-    }
-
     func reload() throws {
         try withExclusiveAccess { replaceState(try read()) }
     }
@@ -124,26 +116,12 @@ final class VectaSummaryFormatStore {
         try mutate { document in
             let index = try Self.index(id, expectedRevision: expectedRevision, deleted: false, in: document)
             let previous = document.entries[index].format
+            guard !previous.isBuiltin else { throw VectaSummaryFormatError.invalidDefinition }
             let deleted = VectaSummaryInterpretation(id: id, title: previous.title, prompt: previous.prompt,
                                                    revision: previous.revision + 1)
             guard deleted.isValid else { throw VectaSummaryFormatError.invalidDefinition }
-            document.entries[index].format = deleted
-            document.entries[index].deletedAt = Date()
+            document.entries.remove(at: index)
             return deleted
-        }
-    }
-
-    @discardableResult
-    func restore(id: String, expectedRevision: Int) throws -> VectaSummaryInterpretation {
-        try mutate { document in
-            let index = try Self.index(id, expectedRevision: expectedRevision, deleted: true, in: document)
-            let previous = document.entries[index].format
-            let restored = VectaSummaryInterpretation(id: id, title: previous.title, prompt: previous.prompt,
-                                                    revision: previous.revision + 1)
-            guard restored.isValid else { throw VectaSummaryFormatError.invalidDefinition }
-            document.entries[index].format = restored
-            document.entries[index].deletedAt = nil
-            return restored
         }
     }
 
@@ -267,7 +245,7 @@ enum VectaSummaryFormatError: LocalizedError {
         switch self {
         case .invalidDefinition: return VL.text("Укажите название до 120 символов и инструкцию до 12 000 символов. Пустые поля не сохраняются.")
         case .invalidCatalog: return VL.text("Не удалось прочитать сохранённые форматы. Существующий файл оставлен без изменений.")
-        case .catalogFull: return VL.text("Каталог форматов заполнен, включая сохранённые удалённые форматы.")
+        case .catalogFull: return VL.text("Каталог форматов заполнен.")
         case .missing: return VL.text("Этот формат больше не найден. Обновите список.")
         case .changedElsewhere: return VL.text("Формат уже изменён в другом окне. Откройте его снова, чтобы сохранить новую версию.")
         case .persistenceFailed: return VL.text("Не удалось сохранить форматы на Mac. Проверьте свободное место и повторите.")

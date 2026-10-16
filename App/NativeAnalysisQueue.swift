@@ -31,14 +31,47 @@ enum NativeAnalysisPolicy {
 /// Durable serial queue. It submits one operation to the existing AI mailbox
 /// at a time, and remembers in-flight IDs across application restarts.
 final class NativeAnalysisQueue {
+    /// Present even when no template was chosen. A missing snapshot identifies
+    /// legacy work that still resolves its recipe when it is submitted.
+    struct RecipeSnapshot: Codable, Equatable {
+        let format: VectaSummaryInterpretation
+        let summaryTemplate: AISummaryTemplate?
+
+        init(format: VectaSummaryInterpretation, summaryTemplate: AISummaryTemplate? = nil) {
+            self.format = format
+            self.summaryTemplate = summaryTemplate
+        }
+
+        func validate() throws {
+            guard format.isValid else { throw AIProcessingError.invalidRequest }
+            try summaryTemplate?.validate()
+        }
+    }
+
     struct Job: Codable, Equatable {
         let identity: NativeRecordingIdentity
         var requestID: UUID?
         var settings:AIAutomaticSettings? = nil
+        var conferenceBundleID: String? = nil
         var batchTotal:Int? = nil
         var completedBefore:Int? = nil
         var failedBefore:Int? = nil
+        let recipeSnapshot: RecipeSnapshot?
+
+        init(identity: NativeRecordingIdentity, requestID: UUID?, settings: AIAutomaticSettings? = nil,
+             conferenceBundleID: String? = nil, batchTotal: Int? = nil, completedBefore: Int? = nil,
+             failedBefore: Int? = nil, recipeSnapshot: RecipeSnapshot? = nil) {
+            self.identity = identity
+            self.requestID = requestID
+            self.settings = settings
+            self.conferenceBundleID = conferenceBundleID
+            self.batchTotal = batchTotal
+            self.completedBefore = completedBefore
+            self.failedBefore = failedBefore
+            self.recipeSnapshot = recipeSnapshot
+        }
     }
+    static let maxDocumentBytes = 2_000_000
     private let url: URL
     private(set) var jobs: [Job]
     private struct LegacyClaim: Codable {
@@ -54,8 +87,10 @@ final class NativeAnalysisQueue {
     private var destinationKey: String { Self.digest(Data(url.resolvingSymlinksInPath().standardizedFileURL.path.utf8)) }
     private static func readRegular(_ url: URL) throws -> Data {
         let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
-        guard values.isRegularFile == true, values.isSymbolicLink != true, (values.fileSize ?? 0) < 2_000_000 else { throw AIProcessingError.invalidRequest }
-        return try Data(contentsOf: url)
+        guard values.isRegularFile == true, values.isSymbolicLink != true, (values.fileSize ?? 0) < maxDocumentBytes else { throw AIProcessingError.invalidRequest }
+        let data = try Data(contentsOf: url)
+        guard data.count < maxDocumentBytes else { throw AIProcessingError.invalidRequest }
+        return data
     }
     /// Historical global work remains untouched. Recovery is an explicit action,
     /// never an implicit import into whichever library happens to be opened.
@@ -102,25 +137,33 @@ final class NativeAnalysisQueue {
     init(url: URL) throws {
         self.url = url
         if FileManager.default.fileExists(atPath: url.path) {
-            let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
-            guard values.isRegularFile == true, values.isSymbolicLink != true, (values.fileSize ?? 0) < 2_000_000 else { throw AIProcessingError.invalidRequest }
-            jobs = try JSONDecoder().decode([Job].self, from: Data(contentsOf: url))
+            jobs = try JSONDecoder().decode([Job].self, from: Self.readRegular(url))
             guard jobs.count <= 5000, Set(jobs.map(\.identity)).count == jobs.count,
-                  jobs.allSatisfy({ $0.identity.sessionID > 0 && VectaDeviceModel(serialNumber: $0.identity.serialNumber) != nil })
+                  jobs.allSatisfy({ Self.validIdentity($0.identity) })
             else { throw AIProcessingError.invalidRequest }
             for job in jobs {
                 try job.settings?.validate()
+                try job.recipeSnapshot?.validate()
                 let completed=job.completedBefore ?? 0,failed=job.failedBefore ?? 0,total=job.batchTotal ?? jobs.count
                 guard completed>=0,failed>=0,failed<=completed,total>=completed+jobs.count,total<=100000 else {throw AIProcessingError.invalidRequest}
             }
         } else { jobs = [] }
     }
-    func append(_ identities: [NativeRecordingIdentity],settings:AIAutomaticSettings? = nil) throws {
+    private static func validIdentity(_ identity: NativeRecordingIdentity) -> Bool {
+        let serial = identity.serialNumber
+        let digest = serial.hasPrefix("local-audio-") ? String(serial.dropFirst("local-audio-".count)) : ""
+        return identity.sessionID > 0 && (VectaDeviceModel(serialNumber: serial) != nil ||
+            (identity.sessionID == 1 && digest.count == 64 && digest.allSatisfy { "0123456789abcdef".contains($0) }))
+    }
+    func append(_ identities: [NativeRecordingIdentity],settings:AIAutomaticSettings? = nil, conferenceBundleID: String? = nil,
+                recipeSnapshot: RecipeSnapshot? = nil) throws {
         try settings?.validate()
+        try recipeSnapshot?.validate()
         var next = jobs
         for identity in identities where !next.contains(where: { $0.identity == identity }) {
-            guard identity.sessionID > 0, VectaDeviceModel(serialNumber: identity.serialNumber) != nil, next.count < 5000 else { throw AIProcessingError.invalidRequest }
-            next.append(Job(identity: identity, requestID: nil,settings:settings))
+            guard Self.validIdentity(identity), next.count < 5000 else { throw AIProcessingError.invalidRequest }
+            next.append(Job(identity: identity, requestID: nil,settings:settings,conferenceBundleID:conferenceBundleID,
+                            recipeSnapshot: recipeSnapshot))
         }
         let added=next.count-jobs.count
         if added>0 {
@@ -129,6 +172,10 @@ final class NativeAnalysisQueue {
             for index in next.indices {next[index].batchTotal=total;next[index].completedBefore=completed;next[index].failedBefore=failed}
         }
         try save(next)
+    }
+    func releaseConferenceWait(_ identity: NativeRecordingIdentity) throws {
+        guard let index = jobs.firstIndex(where: { $0.identity == identity }), jobs[index].requestID == nil else { throw AIProcessingError.busy }
+        var next = jobs; next[index].conferenceBundleID = nil; try save(next)
     }
     func attach(_ id: UUID, to identity: NativeRecordingIdentity) throws {
         guard let index = jobs.firstIndex(where: { $0.identity == identity }) else { throw AIProcessingError.invalidRequest }
@@ -145,16 +192,19 @@ final class NativeAnalysisQueue {
         guard next.count <= 5000, Set(next.map(\.identity)).count == next.count else { throw AIProcessingError.invalidRequest }
         for job in next {
             try job.settings?.validate()
+            try job.recipeSnapshot?.validate()
             let completed=job.completedBefore ?? 0,failed=job.failedBefore ?? 0,total=job.batchTotal ?? next.count
-            guard job.identity.sessionID > 0, VectaDeviceModel(serialNumber: job.identity.serialNumber) != nil,
+            guard Self.validIdentity(job.identity),
                   completed>=0,failed>=0,failed<=completed,total>=completed+next.count,total<=100000 else { throw AIProcessingError.invalidRequest }
         }
+        let data = try JSONEncoder().encode(next)
+        guard data.count < Self.maxDocumentBytes else { throw AIProcessingError.invalidRequest }
         let directory = url.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let parent = try directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
         guard parent.isDirectory == true, parent.isSymbolicLink != true else { throw AIProcessingError.invalidRequest }
         if FileManager.default.fileExists(atPath: url.path) { _ = try Self.readRegular(url) }
-        try JSONEncoder().encode(next).write(to: url, options: .atomic)
+        try data.write(to: url, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         jobs = next
     }

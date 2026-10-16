@@ -26,6 +26,74 @@ import Darwin
         do { try await run(); print("PASS \(count) isolated native runtime checks") }
         catch { print("FAIL after \(count) checks:", error); exit(1) }
     }
+    @MainActor static func permanentDeletionChecks(root: URL, defaults: UserDefaults) async throws {
+        let fm = FileManager.default, base = root.appendingPathComponent("purge-library"), processing = root.appendingPathComponent("purge-processing")
+        let user = "purge-fixture", serial = "882SYNTHETIC"
+        try fm.createDirectory(at: processing, withIntermediateDirectories: true)
+        let exporter = VectaLocalAudioExporter(userID: user, defaults: defaults)
+        try exporter.configureFolder(processing)
+        let layout = NativeStorageLayout(recordingBase: base, userDirectory: base.appendingPathComponent("Users/" + VectaRecordingStore.userDirectoryName(for: user)), servicesDirectory: root)
+        let library = try NativeLibraryController(userID: user, layout: layout, exporter: exporter)
+        let target = NativeRecordingIdentity(serialNumber: serial, sessionID: 41)
+        let other = NativeRecordingIdentity(serialNumber: serial, sessionID: 42)
+        for id in [target, other] {
+            try check(library.recordingStore.begin(sessionID: id.sessionID, serialNumber: serial, duration: 1), "Cannot seed purge fixture")
+            let audio = library.recordingStore.audioDirectory(serialNumber: serial).appendingPathComponent("\(id.sessionID).mp3")
+            try Data("synthetic audio metadata \(id.sessionID)".utf8).write(to: audio)
+            try check(library.recordingStore.markLocal(sessionID: id.sessionID, serialNumber: serial, outputPath: audio.path), "Cannot publish purge fixture")
+        }
+        library.reloadLibrary()
+        let row = library.recordingStore.recording(sessionID: 41, serialNumber: serial)!, audio = library.recordingStore.audioURL(for: library.recordingStore.recording(sessionID: 41, serialNumber: serial)!)!
+        let otherAudio = library.recordingStore.audioURL(for: library.recordingStore.recording(sessionID: 42, serialNumber: serial)!)!
+        let otherBytes = try Data(contentsOf: otherAudio)
+        try await rejectsAsync("Permanent deletion accepted a non-trash row") { try await library.permanentlyDeleteRecording(target) }
+        try library.deleteRecording(target); try library.restoreRecording(target)
+        try check(fm.fileExists(atPath: audio.path), "Soft deletion removed audio")
+        try library.deleteRecording(target)
+        let filename = VectaLocalAudioExporter.filenames(for: row)[0], mailbox = LocalAIFileStore(root: processing)
+        var request = AIProcessingRequest(version: 1, id: UUID(), recordingID: URL(fileURLWithPath: filename).deletingPathExtension().lastPathComponent,
+            audioFilename: filename, audioSHA256: String(repeating: "a", count: 64), provider: .local, format: .detailed, createdAt: Date(), summaryOnly: false, transcriptRequestID: nil)
+        request.summaryModel = .qwen4b
+        try mailbox.submit(request)
+        try await rejectsAsync("Active processing was purged") { try await library.permanentlyDeleteRecording(target) }
+        try check(fm.fileExists(atPath: audio.path), "Busy purge removed source audio")
+        try rejects("Partially purged identity was restorable") { try library.restoreRecording(target) }
+        var result = try mailbox.result(request.id)!
+        result.stage = .completed; result.transcript = "Synthetic transcript"; result.summary = AIStructuredSummary(summary: "Synthetic summary", topics: [], decisions: [], tasks: [], uncertainties: [])
+        try mailbox.save(result)
+        let inbox = processing.appendingPathComponent("Inbox/" + filename)
+        try Data("synthetic export".utf8).write(to: inbox)
+        let outside = root.appendingPathComponent("purge-outside-sentinel")
+        try Data("preserve outside".utf8).write(to: outside)
+        let link = mailbox.resultURL(request.id).appendingPathExtension("alignment.json")
+        try fm.createSymbolicLink(at: link, withDestinationURL: outside)
+        try await rejectsAsync("Purge followed a linked result") { try await library.permanentlyDeleteRecording(target) }
+        try check(Data(contentsOf: outside) == Data("preserve outside".utf8) && fm.fileExists(atPath: inbox.path), "Purge changed files before link preflight")
+        try fm.removeItem(at: link)
+        try Data("synthetic alignment".utf8).write(to: link)
+        let checkpoints = processing.appendingPathComponent("LocalAI/SummaryCheckpoints")
+        try fm.createDirectory(at: checkpoints, withIntermediateDirectories: true)
+        let ownedCache = checkpoints.appendingPathComponent(String(repeating: "a", count: 64) + ".json")
+        let sharedCache = checkpoints.appendingPathComponent(String(repeating: "b", count: 64) + ".json")
+        try Data("owned synthetic summary cache".utf8).write(to: ownedCache)
+        try Data("shared synthetic summary cache".utf8).write(to: sharedCache)
+        try mailbox.registerArtifact(ownedCache, for: request.id); try mailbox.registerArtifact(sharedCache, for: request.id)
+        let speechCache = request.speechCheckpointURL(for: mailbox.resultURL(request.id))
+        try Data("owned synthetic speech checkpoint".utf8).write(to: speechCache)
+        let otherRequest = AIProcessingRequest(version: 1, id: UUID(), recordingID: "other-fixture", audioFilename: "other-fixture.wav", audioSHA256: String(repeating: "b", count: 64), provider: .local, format: .detailed, createdAt: Date(), summaryOnly: false, transcriptRequestID: nil, summaryModel: .qwen4b)
+        try mailbox.submit(otherRequest); try mailbox.registerArtifact(sharedCache, for: otherRequest.id)
+        try await library.permanentlyDeleteRecording(target)
+        try check(!fm.fileExists(atPath: ownedCache.path) && !fm.fileExists(atPath: speechCache.path) && !fm.fileExists(atPath: mailbox.artifactOwnershipURL(request.id).path), "Purge retained an owned processing cache")
+        try check(Data(contentsOf: sharedCache) == Data("shared synthetic summary cache".utf8) && fm.fileExists(atPath: mailbox.requestURL(otherRequest.id).path), "Purge removed another request's shared cache")
+        try check(!fm.fileExists(atPath: audio.path) && !fm.fileExists(atPath: inbox.path), "Permanent deletion left managed audio")
+        try check(!fm.fileExists(atPath: mailbox.requestURL(request.id).path) && !fm.fileExists(atPath: mailbox.resultURL(request.id).path) && !fm.fileExists(atPath: link.path), "Permanent deletion left transcript/result/sidecar")
+        try check(library.deletedRecordings.isEmpty && library.recordingStore.recording(sessionID: 41, serialNumber: serial) == nil, "Purge left metadata or trash entry")
+        try check(Data(contentsOf: otherAudio) == otherBytes && Data(contentsOf: outside) == Data("preserve outside".utf8), "Purge affected another recording or external data")
+        let reopened = try NativeLibraryController(userID: user, layout: layout, exporter: exporter)
+        try reopened.replaceRemoteList([NativeRemoteRecording(identity: target, duration: 1, byteSize: 80)])
+        try check(reopened.purgedRecordings.contains(target) && reopened.item(for: target) == nil, "Purge suppression did not survive reopen/remote sync")
+        try check(reopened.item(for: other)?.audioURL == otherAudio, "Other recording did not survive reopen")
+    }
     @MainActor static func run() async throws {
         let fm = FileManager.default
         let root = fm.temporaryDirectory.appendingPathComponent("VectaNativeRuntimeChecks-" + UUID().uuidString)
@@ -262,6 +330,7 @@ import Darwin
         try await fresh.start(expectedUserID: "known-local-owner", librarySource: .freshDefault(base: freshBase))
         try check(fresh.state == .ready && fresh.library?.recordingStore.all.isEmpty == true, "Explicit fresh default did not initialize known owner")
         await fresh.stop()
+        try await permanentDeletionChecks(root: root, defaults: defaults)
         let danglingBase = root.appendingPathComponent("dangling-default")
         try fm.createSymbolicLink(at: danglingBase, withDestinationURL: root.appendingPathComponent("not-present"))
         try rejects("Fresh default followed a dangling symlink") {

@@ -8,6 +8,8 @@ OPAudioCodec *op_audio_create(int channels, int sample_rate, int *error);
 void op_audio_destroy(OPAudioCodec *codec);
 int op_audio_decode(OPAudioCodec *codec, const uint8_t *packet, int bytes,
                     int16_t *pcm, int capacity_per_channel);
+/* Packet-loss concealment preserves the fixed recorder frame's duration. */
+int op_audio_conceal(OPAudioCodec *codec, int16_t *pcm, int samples_per_channel);
 int op_audio_mp3(OPAudioCodec *codec, const int16_t *pcm, int samples_per_channel,
                  uint8_t *output, int output_capacity);
 int op_audio_flush(OPAudioCodec *codec, uint8_t *output, int output_capacity);

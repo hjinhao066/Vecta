@@ -4,6 +4,35 @@ import WhisperKit
 import SpeakerKit
 import Darwin
 
+/// Retains an unloaded compatible WhisperKit object while the speech server remains alive.
+/// `unload` is always called before another heavy model is allowed to load.
+final class VectaSpeechModelCache {
+    private struct Configuration: Hashable {
+        let modelFolder: String
+        let tokenizerFolder: URL
+        let usesGPUEncoder: Bool
+    }
+
+    private var configurations: [Configuration: WhisperKit] = [:]
+
+    func model(modelFolder: String, tokenizerFolder: URL, remainingWindows: Int) async throws -> WhisperKit {
+        let requested = Configuration(modelFolder: modelFolder, tokenizerFolder: tokenizerFolder, usesGPUEncoder: VectaSpeechModelConfiguration.usesGPUEncoder(remainingWindows: remainingWindows))
+        if let cached = configurations[requested] { return cached }
+        await unload()
+        // Bound retained objects to the two compute policies for these exact paths.
+        if configurations.keys.contains(where: { $0.modelFolder != modelFolder || $0.tokenizerFolder != tokenizerFolder }) {
+            configurations.removeAll()
+        }
+        let whisper = try await WhisperKit(VectaSpeechModelConfiguration.make(modelFolder: modelFolder, tokenizerFolder: tokenizerFolder, remainingWindows: remainingWindows))
+        configurations[requested] = whisper
+        return whisper
+    }
+
+    func unload() async {
+        for whisper in configurations.values { await whisper.unloadModels() }
+    }
+}
+
 enum VectaSpeechPipeline {
     struct UnalignedWord: Codable { let chunk: Int; let start: Double; let end: Double; let text: String }
     /// SpeakerKit's public global API requires one contiguous PCM array.
@@ -63,7 +92,7 @@ enum VectaSpeechPipeline {
         }
         return result
     }
-    static func runWholeRecording(request: AIProcessingRequest, audio: URL, output: URL, duration: Double, speakers: String, tokenizer: String, whisperModel: String? = nil) async throws {
+    static func runWholeRecording(request: AIProcessingRequest, audio: URL, output: URL, duration: Double, speakers: String, tokenizer: String, whisperModel: String? = nil, modelCache: VectaSpeechModelCache? = nil, eventURL: URL? = nil) async throws {
         try AIAudioPolicy.validate(duration:duration)
         var state = AIProcessingResult(version:1,request:request,stage:.loadingRecognition,transcript:nil,segments:[],summary:nil,error:nil,updatedAt:Date(),duration:duration,recognitionSeconds:nil,summarySeconds:nil)
         var words: [GlobalWord] = [], unaligned: [UnalignedWord] = []
@@ -99,15 +128,21 @@ enum VectaSpeechPipeline {
         func save(_ complete: Bool) throws {
             state.updatedAt=Date()
             try privateWrite(JSONEncoder().encode(state),output)
-            try privateWrite(JSONEncoder().encode(WholeAlignment(mode:"B: independent Whisper windows + global non-exclusive SpeakerKit",phase:phase,duration:duration,complete:complete,rawNonExclusiveTimeline:timeline,words:words,unalignedWords:unaligned,centroids:centroids,numberOfEmbeddings:embeddingCount)),output.appendingPathExtension("alignment.json"))
+            try privateWrite(JSONEncoder().encode(WholeAlignment(mode:request.wantsDiarization ? "B: independent Whisper windows + global non-exclusive SpeakerKit" : "Whisper windows; diarization disabled by user",phase:phase,duration:duration,complete:complete,rawNonExclusiveTimeline:timeline,words:words,unalignedWords:unaligned,centroids:centroids,numberOfEmbeddings:embeddingCount)),output.appendingPathExtension("alignment.json"))
         }
         try save(false)
         var whisperLoad=0.0
         if completed < windows.count {
         let loadStart=ProcessInfo.processInfo.systemUptime
         let remainingWindows=windows.count-completed
-        let configuration=VectaSpeechModelConfiguration.make(modelFolder:whisperModel ?? CommandLine.arguments[3],tokenizerFolder:URL(fileURLWithPath:tokenizer),remainingWindows:remainingWindows)
-        let whisper=try await WhisperKit(configuration)
+        let modelFolder=whisperModel ?? CommandLine.arguments[3]
+        let tokenizerFolder=URL(fileURLWithPath:tokenizer)
+        let whisper: WhisperKit
+        if let modelCache {
+            whisper=try await modelCache.model(modelFolder:modelFolder,tokenizerFolder:tokenizerFolder,remainingWindows:remainingWindows)
+        } else {
+            whisper=try await WhisperKit(VectaSpeechModelConfiguration.make(modelFolder:modelFolder,tokenizerFolder:tokenizerFolder,remainingWindows:remainingWindows))
+        }
         let setupSeconds=ProcessInfo.processInfo.systemUptime-loadStart
         let explicitLoadStart=ProcessInfo.processInfo.systemUptime
         func saveStartupTiming(_ phase:String) {
@@ -136,7 +171,7 @@ enum VectaSpeechPipeline {
             try Task.checkCancellation()
             state.stage = .recognizing
             state.recognitionProgress=AIRecognitionProgress(completedChunks:w.index,totalChunks:windows.count,processedSeconds:w.coreStart,totalSeconds:duration,currentChunk:w.index+1,modelLoadSeconds:whisperLoad)
-            state.recognitionProgress?.speakerScope="whole-recording automatic identity; unconfirmed"
+            state.recognitionProgress?.speakerScope=request.wantsDiarization ? "whole-recording automatic identity; unconfirmed" : "diarization disabled by user"
             try save(false)
             let pcm=try LocalAudioReader.readWindow(audio,start:w.start,end:w.end)
             let started=Date()
@@ -159,14 +194,25 @@ enum VectaSpeechPipeline {
             try privateWrite(JSONEncoder().encode(Checkpoint(version:request.speechCheckpointVersion,digest:request.audioSHA256,duration:duration,completed:w.index+1,seconds:asrSeconds,words:words,unaligned:unaligned,outputLanguage:request.outputLanguage,decodingPolicy:request.speechDecodingPolicy)),checkpointURL)
             try save(false)
         }
-        await whisper.unloadModels()
+        if let modelCache { await modelCache.unload() } else { await whisper.unloadModels() }
         } catch {
             if whisperLoad==0 {saveStartupTiming(error is CancellationError || Task.isCancelled ? "cancelled":"failed")}
-            await whisper.unloadModels()
+            if let modelCache { await modelCache.unload() } else { await whisper.unloadModels() }
             throw error
         }
         }
         guard !words.isEmpty else { throw AIProcessingError.invalidTranscript }
+        if !request.wantsDiarization {
+            // Explicit conference opt-out: retain every recognized word and its
+            // timing, without loading SpeakerKit or inferring a speaker identity.
+            for index in words.indices { words[index].uncertainty = "speaker attribution disabled by user" }
+            state.segments = utterances(words)
+            state.transcript = words.map(\.text).joined() + (unaligned.isEmpty ? "" : "\n" + unaligned.map(\.text).joined())
+            state.unmatchedText = unaligned.isEmpty ? nil : unaligned.map(\.text).joined()
+            state.recognitionSeconds = asrSeconds
+            state.stage = request.wantsSummary ? .loadingSummary : .savingTranscript; phase = "complete"
+            try state.validate(); try save(true); return
+        }
         // Retain one global clustering state. Never split identities by ASR window.
         // Refuse an unsafe reservation before allocating the full PCM; checkpoint survives.
         let reservation=AIAudioPolicy.diarizationReservation(duration:duration)
@@ -182,8 +228,9 @@ enum VectaSpeechPipeline {
         let speakerLoadStart=Date()
         let speaker=try await SpeakerKit(PyannoteConfig(modelFolder:speakers,download:false,load:true,verbose:false,concurrentSegmenterWorkers:1,concurrentEmbedderWorkers:1))
         let speakerLoad=Date().timeIntervalSince(speakerLoadStart)
+        do {
         let diarizationStart=Date()
-        let result = try await diarize(speaker,audio:audio,duration:duration)
+        let result = try await diarize(speaker,audio:audio,duration:duration,eventURL:eventURL)
         try Task.checkCancellation()
         let diarizationSeconds=Date().timeIntervalSince(diarizationStart)
         embeddingCount=(result.timings as? PyannoteDiarizationTimings)?.numberOfEmbeddings
@@ -217,20 +264,22 @@ enum VectaSpeechPipeline {
         try privateWrite(Data(rttm.utf8),output.appendingPathExtension("rttm"))
         phase="complete"
         try Task.checkCancellation()
-        state.stage = .loadingSummary
+        state.stage = request.wantsSummary ? .loadingSummary : .savingTranscript
         try save(true)
         await speaker.unloadModels()
-        do {
-            let path=ProcessInfo.processInfo.environment["VECTA_ASR_PROFILE_PATH"] ?? output.appendingPathExtension("metrics.json").path
-            let metrics:[String:Any]=["mode":"B","asrSeconds":asrSeconds,"diarizationSeconds":diarizationSeconds,"modelLoadSeconds":whisperLoad+speakerLoad,"chunks":windows.count,"numberOfEmbeddings":embeddingCount!,"numberOfSpeakers":result.speakerCount,"errors":0,"partial":false,"contentCompletenessVerified":false,"sdkInternalErrorCountAvailable":false,"unalignedWords":unaligned.count,"resolvedWords":words.filter{$0.globalID != nil}.count,"totalWords":words.count]
-            try privateWrite(JSONSerialization.data(withJSONObject:metrics,options:.prettyPrinted),URL(fileURLWithPath:path))
+        let path=ProcessInfo.processInfo.environment["VECTA_ASR_PROFILE_PATH"] ?? output.appendingPathExtension("metrics.json").path
+        let metrics:[String:Any]=["mode":"B","asrSeconds":asrSeconds,"diarizationSeconds":diarizationSeconds,"modelLoadSeconds":whisperLoad+speakerLoad,"chunks":windows.count,"numberOfEmbeddings":embeddingCount!,"numberOfSpeakers":result.speakerCount,"errors":0,"partial":false,"contentCompletenessVerified":false,"sdkInternalErrorCountAvailable":false,"unalignedWords":unaligned.count,"resolvedWords":words.filter{$0.globalID != nil}.count,"totalWords":words.count]
+        if let data=try? JSONSerialization.data(withJSONObject:metrics,options:.prettyPrinted) { try? privateWrite(data,URL(fileURLWithPath:path)) }
+        } catch {
+            await speaker.unloadModels()
+            throw error
         }
     }
     /// Scope the necessary full PCM to inference, releasing it before word alignment,
     /// JSON serialization and summary generation.
-    static func diarize(_ speaker:SpeakerKit,audio:URL,duration:Double) async throws -> DiarizationResult {
+    static func diarize(_ speaker:SpeakerKit,audio:URL,duration:Double,eventURL:URL?=nil) async throws -> DiarizationResult {
         let pcm=try fullDiarizationPCM(audio,duration:duration)
-        let eventURL=ProcessInfo.processInfo.environment["VECTA_SPEECH_EVENT_PATH"].map {URL(fileURLWithPath:$0)}
+        let eventURL=eventURL ?? ProcessInfo.processInfo.environment["VECTA_SPEECH_EVENT_PATH"].map {URL(fileURLWithPath:$0)}
         return try await speaker.diarize(audioArray:pcm,options:PyannoteDiarizationOptions(useExclusiveReconciliation:false),progressCallback:{ progress in
             guard let eventURL else {return}
             let event=AIWorkerEvent(phase:"diarization",completed:Int(progress.completedUnitCount),total:Int(progress.totalUnitCount),generatedTokens:0,modelLoadSeconds:nil)

@@ -41,7 +41,7 @@ struct NativeStreamingText:View {
         LazyVStack(alignment:.leading,spacing:12) {
             ForEach(Array(parts.enumerated()),id:\.offset) {_,part in
                 Text(part.text)
-                    .font(part.kind == .code || part.kind == .table ? .system(size:12,design:.monospaced):.system(size:part.kind == .heading ? 16:13,weight:part.kind == .heading ? .semibold:.regular)).lineSpacing(5).textSelection(.enabled)
+                    .font(part.kind == .code || part.kind == .table ? .system(size:12,design:.monospaced):.system(size:part.kind == .heading ? 16:13,weight:part.kind == .heading ? .bold:.regular)).lineSpacing(5).textSelection(.enabled)
                     .padding(.leading,part.kind == .quote ? 14:0)
                     .padding(.top,part.kind == .heading ? 8:0)
                     .frame(maxWidth:.infinity,alignment:.leading)

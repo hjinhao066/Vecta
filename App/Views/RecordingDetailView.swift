@@ -18,6 +18,14 @@ struct NativeRecordingDetail: View {
     @State private var editingSpeaker:NativeSpeakerSelection?
     @State private var showingExport=false
     @State private var wordSegment:AISpeechSegment?
+    private struct PendingModelInstallation {
+        let recording: NativeRecordingIdentity
+        let recipe: NativeSummaryRecipe
+        let reuseTranscript: Bool
+        let model: AISummaryModelID
+        let models: [LocalModelDefinition]
+    }
+    @State private var pendingModelInstallation: PendingModelInstallation?
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Button(action: back) { Label(VL.text("Все записи"), systemImage: "chevron.left") }.buttonStyle(.plain).font(.system(size: 12)).foregroundColor(Ink.secondary)
@@ -61,6 +69,7 @@ struct NativeRecordingDetail: View {
                 }
             }
         }.padding(16).frame(maxWidth:1120,maxHeight:.infinity,alignment:.topLeading).frame(maxWidth:.infinity)
+            .background(NativeRecordingKeyboard(model: model).frame(width: 0, height: 0))
             .sheet(item:$editingSpeaker) {person in NativeSpeakerSheet(model:model,speakerID:person.id,rejectedProfileID:person.rejectedProfileID)}
             .sheet(isPresented:$showingExport) {NativeExportSheet(model:model)}
             .sheet(isPresented:$showingGeneration) {
@@ -68,7 +77,20 @@ struct NativeRecordingDetail: View {
                     recipeID=recipe.id
                     if recipe.template == nil {formatID=recipe.format.id}
                     model.localAI?.selectSummaryModel(selectedModel)
-                    model.analyze(format:recipe.format,template:recipe.template)
+                    requestAnalysis(recipe:recipe,reuseTranscript:true)
+                }
+            }
+            .confirmationDialog(VL.text("Скачать модели и обработать запись?"), isPresented: Binding(get: { pendingModelInstallation != nil }, set: { if !$0 { pendingModelInstallation = nil } })) {
+                Button(VL.text("Скачать и обработать")) {
+                    guard let pending = pendingModelInstallation, model.selected == pending.recording else { pendingModelInstallation = nil; return }
+                    pendingModelInstallation = nil
+                    model.localAI?.selectSummaryModel(pending.model)
+                    model.analyze(format:pending.recipe.format,reuseTranscript:pending.reuseTranscript,template:pending.recipe.template,installMissingModels:true)
+                }
+                Button(VL.text("Отмена"),role:.cancel) { pendingModelInstallation = nil }
+            } message: {
+                if let pending = pendingModelInstallation {
+                    Text(VL.text("Будут скачаны: ") + pending.models.map { VL.string($0.title) }.joined(separator:", ") + " · " + VL.bytes(pending.models.reduce(0) { $0 + $1.size }) + ". " + VL.text("После установки начнётся локальная обработка. Исходная запись и предыдущие результаты сохранятся."))
                 }
             }
             .confirmationDialog(VL.text("Перерасшифровать запись?"),isPresented:$confirmingRetranscription) {
@@ -89,7 +111,11 @@ struct NativeRecordingDetail: View {
                 guard !Task.isCancelled,model.presentationRevision==revision else{return}
                 preparedRevision=revision
             }
-            .onAppear {consumeExportRequest();model.loadWorkspace();if model.librarySourceNavigation {tab=1;model.librarySourceNavigation=false}}
+            .onAppear {
+                #if VECTA_DEVELOPMENT
+                if CommandLine.arguments.contains("--verify-highlight-ui") { tab = 1 }
+                #endif
+                consumeExportRequest();model.loadWorkspace();if model.librarySourceNavigation {tab=1;model.librarySourceNavigation=false}}
             .sheet(isPresented:$showingInformation) {
                 VStack(alignment:.leading,spacing:16) {
                     if let item=model.selection { ScrollView { information(item) } }
@@ -174,7 +200,7 @@ struct NativeRecordingDetail: View {
 
         }
     }
-    private var recipes:[NativeSummaryRecipe] {NativeSummarySelection.creationRecipes(in:NativeSummarySelection.recipes(formats:model.formats,templates:model.workspace.templates))}
+    private var recipes:[NativeSummaryRecipe] {NativeSummarySelection.creationRecipes(in:NativeSummarySelection.recipes(formats:model.formats,templates:model.currentSummaryTemplates))}
     private var selectedRecipe:NativeSummaryRecipe? {NativeSummarySelection.selected(recipeID.isEmpty ? nil:recipeID,legacyFormat:formatID,in:recipes)}
     private var summaryUnavailable:String? {
         guard let host=model.localAI else {return VL.text("Локальный ИИ ещё не готов.")}
@@ -183,10 +209,18 @@ struct NativeRecordingDetail: View {
         if NativeSummarySelection.transcriptSource(model.analyses)==nil && !["whisper","speaker","tokenizer"].allSatisfy({host.statuses[$0]?.state == .installed}) {return VL.text("Для первой обработки установите модели распознавания в разделе «Локальный ИИ».")}
         return nil
     }
-    private var canStartSummary:Bool {selectedRecipe != nil && summaryUnavailable==nil && !model.analysisBusy && !model.visualRetryBusy}
+    private var canStartSummary:Bool {selectedRecipe != nil && model.localAI?.supported == true && (model.localAI?.summaryModel.compatible() ?? false) && !model.analysisBusy && !model.visualRetryBusy}
     private func startSummary(reuseTranscript:Bool=true) {
         guard let recipe=selectedRecipe else{return}
-        model.analyze(format:recipe.format,reuseTranscript:reuseTranscript,template:recipe.template)
+        requestAnalysis(recipe:recipe,reuseTranscript:reuseTranscript)
+    }
+    private func requestAnalysis(recipe:NativeSummaryRecipe,reuseTranscript:Bool) {
+        guard let host=model.localAI,let recording=model.selected else {return}
+        let source=reuseTranscript && NativeSummarySelection.transcriptSource(model.analyses) != nil
+        let ids=host.modelsNeeded(reuseTranscript:source).filter {host.statuses[$0]?.state != .installed && !host.isModelBusy($0)}
+        if !ids.isEmpty {
+            pendingModelInstallation=PendingModelInstallation(recording:recording,recipe:recipe,reuseTranscript:reuseTranscript,model:host.summaryModel,models:host.registry.models.filter {ids.contains($0.id)})
+        } else {model.analyze(format:recipe.format,reuseTranscript:reuseTranscript,template:recipe.template)}
     }
     private var summary: some View {
         LazyVStack(alignment: .leading, spacing: 20) {
@@ -210,16 +244,9 @@ struct NativeRecordingDetail: View {
                 Text(error+VL.text(" Текстовое саммари сохранено.")).font(.system(size:12)).foregroundColor(Ink.secondary)
             }
             if model.analysis?.summary != nil {
-                if model.visualRetryBusy {HStack {ProgressView().controlSize(.small);Text(VL.text("Создаём визуальный отчёт…"));Button(VL.text("Остановить")) {model.visualRetryTask?.cancel()}.buttonStyle(QuietButton())}}
-                else {
-                    Button(model.analysis?.visualSummary == nil ? VL.text("Создать инфографику"):VL.text("Пересоздать инфографику")) {model.retryVisualReport()}.buttonStyle(QuietButton()).disabled(model.localAI?.statuses[model.localAI?.visualModel.rawValue ?? "qwen9b"]?.state != .installed || model.analysisBusy)
-                    if model.localAI?.statuses[model.localAI?.visualModel.rawValue ?? "qwen9b"]?.state != .installed {Text(VL.text("Для инфографики установите выбранную модель в разделе «Локальный ИИ».")).font(.system(size:11)).foregroundColor(Ink.muted)}
-                }
-            }
-            if model.analysis?.summary != nil {
                 if model.conversation.summaryNeedsReview { Text(VL.text("Авторство реплик изменено. Проверьте готовые выводы; содержание саммари автоматически не переписывалось.")).font(.system(size:12)).foregroundColor(Ink.secondary) }
                 if let document=model.analysis?.completeTextSummary {
-                    NativeStreamingText(text:document.rendered(speakers:model.resolvedConversation))
+                    NativeStreamingText(text:document.rendered(speakers:model.resolvedConversation,markdownHeadings:true))
                 }
                 Button(VL.text("Скопировать саммари")) { model.copyAnalysis(transcript: false) }.buttonStyle(QuietButton())
             } else if !model.history.isEmpty { resultSection(VL.text("Сохранённое ранее саммари")) { Text(model.history).textSelection(.enabled).lineSpacing(5) } }
@@ -277,7 +304,10 @@ struct NativeRecordingDetail: View {
 }
 
 struct NativeWaveformView: View {
-    let values: [Float]; let fraction: Double; let seek: (Double) -> Void
+    let values: [Float]; let fraction: Double
+    var highlights: [VectaHighlightRange] = []
+    var duration: Double = 0
+    let seek: (Double) -> Void
     var body: some View {
         GeometryReader { geometry in
             Canvas { context, size in
@@ -285,7 +315,9 @@ struct NativeWaveformView: View {
                 for (index, value) in values.enumerated() {
                     let height = max(2, CGFloat(value) * (size.height - 4))
                     let rect = CGRect(x: CGFloat(index) * step, y: (size.height - height) / 2, width: max(1, step * 0.48), height: height)
-                    context.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(Double(index) / Double(values.count) <= fraction ? Ink.text : Ink.muted.opacity(0.55)))
+                    let highlighted = highlights.contains { $0.overlaps(start: Double(index) / Double(values.count) * duration,
+                                                                 end: Double(index + 1) / Double(values.count) * duration) }
+                    context.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(highlighted ? Ink.error : (Double(index) / Double(values.count) <= fraction ? Ink.text : Ink.muted.opacity(0.55))))
                 }
             }.contentShape(Rectangle()).gesture(DragGesture(minimumDistance: 0).onChanged { value in seek(min(1, max(0, value.location.x / max(1, geometry.size.width)))) })
         }.frame(height: 34).accessibilityElement().accessibilityLabel(VL.text("Позиция воспроизведения"))
@@ -295,4 +327,5 @@ struct NativeWaveformView: View {
             }
     }
 }
+
 

@@ -20,6 +20,7 @@ struct NativeMacView: View {
                 case .library:
                     if detail, model.selection != nil { NativeRecordingDetail(model: model, back: { detail = false }) }
                     else { library }
+                case .conferences: NativeConferencesScreen(model: model)
                 case .device: NativeDeviceScreen(model: model)
                 case .ai:
                     if let host = model.localAI { NativeAISettings(host: host) }
@@ -29,6 +30,9 @@ struct NativeMacView: View {
                 case .formats:
                     if let controller = model.library { NativeFormatsScreen(model:model,library: controller) }
                     else { unavailable }
+                }
+                if model.macRecorder.busy {
+                    NativeMacRecordingStrip(recorder: model.macRecorder).padding(.horizontal, 28).padding(.bottom, 12)
                 }
                 if model.transferring || model.fastTransferPhase != nil {
                     NativeTransferStrip(model: model).padding(.horizontal, 28).padding(.bottom, 16)
@@ -114,6 +118,8 @@ struct NativeMacView: View {
             }.padding(.horizontal, 8).padding(.top, 8)
             VStack(spacing: 5) {
                 nav(.library, VL.text("Все записи"), "waveform", count: model.library?.items.count)
+                nav(.conferences, VL.text("Конференции"), "person.2.wave.2")
+                nav(.formats, VL.text("Форматы"), "text.badge.plus")
                 nav(.ai, VL.text("Локальный ИИ"), "sparkles")
                 nav(.settings, VL.text("Настройки"), "gearshape")
             }
@@ -138,7 +144,7 @@ struct NativeMacView: View {
     private var sidebarToggle: some View {
         Button { compactSidebar.toggle() } label: {
             Label(compactSidebar ? VL.text("Показать боковую панель") : VL.text("Скрыть боковую панель"), systemImage: "sidebar.left").labelStyle(.iconOnly)
-        }.buttonStyle(.plain).foregroundColor(Ink.secondary).padding(4)
+        }.buttonStyle(.plain).vectaFocusStyle().foregroundColor(Ink.secondary).padding(4)
             .help(compactSidebar ? VL.text("Показать боковую панель") : VL.text("Скрыть боковую панель"))
     }
     private func nav(_ destination: NativeDestination, _ title: String, _ icon: String, count: Int? = nil) -> some View {
@@ -229,6 +235,7 @@ struct NativeMacView: View {
 struct NativeRecordingTrash: View {
     @ObservedObject var model: NativeMacModel
     @Environment(\.dismiss) private var dismiss
+    @State private var deleting: NativeDeletedRecording?
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(VL.text("Удалённые записи")).font(.system(size: 22, weight: .semibold))
@@ -240,13 +247,23 @@ struct NativeRecordingTrash: View {
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 6) { Text(item.title).lineLimit(2); Text(item.deletedAt.vectaFormatted(date: .abbreviated, time: .shortened)).font(.system(size: 11)).foregroundColor(Ink.muted) }
                             Spacer()
-                            Button(VL.text("Восстановить")) { model.restoreRecording(item.identity) }.buttonStyle(QuietButton()).disabled(model.busy)
+                            Button(VL.text("Восстановить")) { model.restoreRecording(item.identity) }.buttonStyle(QuietButton()).disabled(model.busy || model.library?.purgedRecordings.contains(item.identity) == true)
+                            Button(VL.text("Удалить навсегда"), role: .destructive) { deleting = item }
+                                .buttonStyle(QuietButton()).disabled(!model.canPermanentlyDeleteRecording(item.identity))
                         }.padding(12).background(Ink.surface).cornerRadius(8)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack { Spacer(); Button(VL.text("Готово")) { dismiss() }.buttonStyle(QuietButton(primary: true)).keyboardShortcut(.cancelAction) }
-        }.padding(24).frame(width: 480, height: 380).background(Ink.canvas).foregroundColor(Ink.text)
+        }.padding(24).frame(width: 620, height: 420).background(Ink.canvas).foregroundColor(Ink.text)
+        .alert(VL.text("Удалить запись навсегда?"), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
+            Button(VL.text("Удалить навсегда"), role: .destructive) {
+                if let item = deleting { model.permanentlyDeleteRecording(item.identity) }; deleting = nil
+            }
+            Button(VL.text("Отмена"), role: .cancel) { deleting = nil }
+        } message: {
+            Text((deleting?.title ?? "") + "\n\n" + VL.text("Аудио, расшифровки и саммари этой записи будут удалены из библиотеки Vecta на Mac без возможности восстановления. Оригинал на Plaud, внешние экспорты и резервные копии останутся."))
+        }
     }
 }
 
@@ -300,8 +317,14 @@ struct NativeSummaryCreationSheet:View {
             Text(model.analysis?.summary == nil ? VL.text("Создать саммари"):VL.text("Новая версия саммари")).font(.system(size:22,weight:.semibold)).accessibilityAddTraits(.isHeader)
             ScrollView {
                 VStack(alignment:.leading,spacing:16) {
-                    Text(VL.text("Формат")).font(.system(size:12,weight:.semibold)).foregroundColor(Ink.secondary)
-                    ForEach(creationRecipes) {recipe in recipeRow(recipe)}
+                    ForEach(NativeSummaryPresentationCategory.allCases) { category in
+                        let choices = creationRecipes.filter { $0.category == category }
+                        if !choices.isEmpty {
+                            Text(category.title).font(.system(size:12,weight:.semibold)).foregroundColor(Ink.secondary)
+                            ForEach(choices) { recipe in recipeRow(recipe) }
+                        }
+                    }
+                    Button(VL.text("Управлять форматами")) { dismiss(); model.destination = .formats }.buttonStyle(QuietButton())
                     Divider()
                     Text(VL.text("Модель ИИ · ")+selectedModel.selectionTitle+VL.text(". Общая для саммари, инфографики и ассистента.")).font(.system(size:12)).foregroundColor(Ink.secondary)
                     Text(model.localAI?.automaticSettings.visual == true ? VL.text("Визуальное саммари включено и будет создано автоматически."):VL.text("Визуальное саммари выключено в настройках.")).font(.system(size:11)).foregroundColor(Ink.muted)

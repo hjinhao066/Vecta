@@ -7,7 +7,7 @@ on-device, save speaker profiles, and export PDF reports. Vecta is a native macO
 app for Apple Silicon Macs with **8 GB of unified memory or more** using the 4B
 model. The interface supports **English and Russian**.
 
-[Download the developer preview](https://github.com/olgvroe/Vecta/releases/tag/v0.1.0)
+[Download Vecta 0.1.0 build 76](https://github.com/olgvroe/Vecta/releases/tag/v0.1.0-build76)
 · [Build from source](docs/BUILD.md)
 · [Installation](docs/INSTALL.md)
 
@@ -73,7 +73,54 @@ formats and can pause or cancel processing.
 Automatic sync runs **while the app is open**; Vecta is not a background service
 that continues after you quit it.
 
-![Automatic synchronization and local processing settings](docs/assets/screenshots/automation.png)
+## Recording permissions
+
+Opening Conferences does not request Screen Recording or microphone access.
+Recording permissions are checked when you choose Start; unattended conference
+recording waits for existing permissions instead of prompting in the background.
+An already authorized microphone is not requested again.
+
+Build 76 uses a stable Apple Development signing identity rather than a different
+ad-hoc code identity on each rebuild. Switching identities may require a one-time
+new macOS grant. This does not override revoked permissions, OS reminders or
+Gatekeeper, and is not Developer ID signing or notarization.
+
+## Startup and background behavior
+
+**Launch at login** is on by default. On the first normal launch, Vecta asks macOS
+to register it as a login item; macOS may require approval. The setting shows
+the current status and how to continue.
+
+**Keep running in background** is also on by default. Closing the main window
+keeps Vecta and its work open; reopen it from the Dock, Settings or the status
+menu. Choose **Quit Vecta** or press **Command-Q** to terminate it. Turn the
+setting off if closing the window should quit the app.
+
+![Launch and background settings](docs/assets/screenshots/automation.png)
+
+## Fast transcription
+
+**Fast transcription** is on by default. While Vecta remains open—including
+when its window is closed in background mode—it may retain roughly **700 MB** of
+additional RAM so later work can start sooner. The first preparation can still
+take time. Turn it off to use the earlier per-recording transcription mode.
+
+## Summary formats
+
+The **Formats** sidebar lets you create and edit custom text-summary
+instructions, then select them for manual summaries, automatic processing and
+Conferences. Deleting a custom format is permanent for that definition; saved
+results and queued recipe snapshots that used it are retained.
+
+![Custom summary formats](docs/assets/screenshots/library.png)
+
+## Record on your Mac
+
+Record system audio, a Mac microphone, both together, or a selected running
+application for a conference. Recording is opt-in: choose **Start**, or explicitly
+enable automatic conference recording in Settings. macOS requests the needed
+microphone or system-audio permission for the selected source. The optional menu-bar control provides source selection and
+Start/Stop without recording automatically.
 
 ## Your recording library
 
@@ -81,13 +128,6 @@ Keep recordings, transcripts and different summary versions together. Search the
 library, listen to the original audio, ask the assistant about a recording, or
 ask questions across saved transcripts.
 
-<details>
-<summary>Library screenshot</summary>
-
-![Local recording library](docs/assets/screenshots/library.png)
-
-
-</details>
 
 ## Requirements
 
@@ -107,7 +147,8 @@ Download the DMG from [Releases](https://github.com/olgvroe/Vecta/releases), ope
 and drag Vecta to Applications. Back up an existing library before replacement or
 migration.
 
-**0.1.0 is a developer preview, ad-hoc signed and not notarized.** Gatekeeper may
+**Build 76 is a developer preview signed with Apple Development, not Developer ID,
+and is not notarized.** Gatekeeper may
 block it. Verify the release origin and checksums; if you choose to trust it, use
 Apple's documented **Privacy & Security → Open Anyway** route. Do not disable
 Gatekeeper or bypass a malware warning. See [installation instructions](docs/INSTALL.md).

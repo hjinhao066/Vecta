@@ -50,13 +50,14 @@ struct NativeDeletedRecording: Codable, Identifiable {
     private var itemIndex:[NativeRecordingIdentity:NativeLibraryItem]=[:]
     func item(for identity:NativeRecordingIdentity)->NativeLibraryItem? {itemIndex[identity]}
     @Published private(set) var formats: [VectaSummaryInterpretation] = []
-    @Published private(set) var deletedFormats: [VectaSummaryInterpretation] = []
     @Published private(set) var message: String?
     let recordingStore: VectaRecordingStore
     let formatStore: VectaSummaryFormatStore
     let exporter: VectaLocalAudioExporter
     @Published private(set) var deletedRecordings: [NativeDeletedRecording] = []
     private let deletionURL: URL
+    private let purgeURL: URL
+    private(set) var purgedRecordings: Set<NativeRecordingIdentity> = []
     private var remote: [NativeRecordingIdentity: NativeRemoteRecording] = [:]
 
     init(userID: String, layout: NativeStorageLayout, exporter: VectaLocalAudioExporter) throws {
@@ -64,6 +65,13 @@ struct NativeDeletedRecording: Codable, Identifiable {
         formatStore = try VectaSummaryFormatStore(userID: userID, directory: layout.recordingBase)
         self.exporter = exporter
         deletionURL = layout.recordingBase.appendingPathComponent("Users").appendingPathComponent(VectaRecordingStore.userDirectoryName(for: userID)).appendingPathComponent("native-recording-trash.json")
+        purgeURL = deletionURL.deletingLastPathComponent().appendingPathComponent("native-recording-purged.json")
+        if FileManager.default.fileExists(atPath: purgeURL.path) {
+            let values = try purgeURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+            guard values.isRegularFile == true, values.isSymbolicLink != true, (values.fileSize ?? 0) < 8_000_000 else { throw NativeLibraryError.persistenceFailed }
+            purgedRecordings = try JSONDecoder().decode(Set<NativeRecordingIdentity>.self, from: Data(contentsOf: purgeURL))
+            guard purgedRecordings.allSatisfy({ $0.sessionID > 0 && !$0.serialNumber.isEmpty }) else { throw NativeLibraryError.persistenceFailed }
+        }
         if FileManager.default.fileExists(atPath: deletionURL.path) {
             let values = try deletionURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
             guard values.isRegularFile == true, values.isSymbolicLink != true, (values.fileSize ?? 0) < 8_000_000 else { throw NativeLibraryError.persistenceFailed }
@@ -98,7 +106,7 @@ struct NativeDeletedRecording: Codable, Identifiable {
         let saved = Dictionary(uniqueKeysWithValues: recordingStore.all.map {
             (NativeRecordingIdentity(serialNumber: $0.deviceSerialNumber, sessionID: $0.sessionID), $0)
         })
-        let next = Set(saved.keys).union(remote.keys).subtracting(deletedRecordings.map(\.identity)).map { identity in
+        let next = Set(saved.keys).union(remote.keys).subtracting(deletedRecordings.map(\.identity)).subtracting(purgedRecordings).map { identity in
             let local = saved[identity]
             let audio = local.flatMap { $0.status == .copying ? nil : recordingStore.audioURL(for: $0) }
             return NativeLibraryItem(identity: identity, local: local, remote: remote[identity], audioURL: audio)
@@ -123,7 +131,25 @@ struct NativeDeletedRecording: Codable, Identifiable {
     }
 
     func restoreRecording(_ identity: NativeRecordingIdentity) throws {
+        guard !purgedRecordings.contains(identity), deletedRecordings.contains(where: { $0.identity == identity }) else { throw NativeLibraryError.invalidRecording }
+        try saveTrash(deletedRecordings.filter { $0.identity != identity })
+    }
+
+    /// Called only after a separate destructive confirmation in the trash UI.
+    /// Persist identity-only suppression first so a crash cannot auto-redownload
+    /// or offer restoration of an already partially purged recording.
+    func permanentlyDeleteRecording(_ identity: NativeRecordingIdentity) async throws {
         guard deletedRecordings.contains(where: { $0.identity == identity }) else { throw NativeLibraryError.invalidRecording }
+        let next = purgedRecordings.union([identity])
+        try JSONEncoder().encode(next).write(to: purgeURL, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: purgeURL.path)
+        purgedRecordings = next
+        if let recording = recordingStore.recording(sessionID: identity.sessionID, serialNumber: identity.serialNumber) {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                exporter.permanentlyDelete(recording: recording) { continuation.resume(with: $0) }
+            }
+        }
+        try recordingStore.permanentlyRemove(sessionID: identity.sessionID, serialNumber: identity.serialNumber)
         try saveTrash(deletedRecordings.filter { $0.identity != identity })
     }
 
@@ -135,7 +161,7 @@ struct NativeDeletedRecording: Codable, Identifiable {
     }
 
     func beginTransfer(_ identity: NativeRecordingIdentity) throws {
-        guard !deletedRecordings.contains(where: { $0.identity == identity }), let value = remote[identity] else { throw NativeLibraryError.notOnRecorder }
+        guard !purgedRecordings.contains(identity), !deletedRecordings.contains(where: { $0.identity == identity }), let value = remote[identity] else { throw NativeLibraryError.notOnRecorder }
         if let existing = recordingStore.recording(sessionID: identity.sessionID, serialNumber: identity.serialNumber),
            existing.status != .copying, recordingStore.audioURL(for: existing) != nil {
             throw NativeLibraryError.alreadyLocal
@@ -154,7 +180,7 @@ struct NativeDeletedRecording: Codable, Identifiable {
     /// Invoke only after the transport's complete-size/CRC and codec success.
     /// An additional AVFoundation check rejects an unreadable/empty artifact;
     /// this is not a replacement for the transport completion proof.
-    func publishCompletedMP3(_ stagedMP3: URL, for identity: NativeRecordingIdentity) async throws -> URL {
+    func publishCompletedMP3(_ stagedMP3: URL, for identity: NativeRecordingIdentity, recorderHighlights: [Double]? = nil) async throws -> URL {
         guard let recording = recordingStore.recording(sessionID: identity.sessionID, serialNumber: identity.serialNumber),
               recording.status == .copying else { throw NativeLibraryError.noTransferAttempt }
         let asset = AVURLAsset(url: stagedMP3)
@@ -182,7 +208,7 @@ struct NativeDeletedRecording: Codable, Identifiable {
             throw NativeLibraryError.noTransferAttempt
         }
         guard recordingStore.markLocal(sessionID: identity.sessionID, serialNumber: identity.serialNumber,
-                                      outputPath: published.path, verifiedDuration: duration) else {
+                                      outputPath: published.path, verifiedDuration: duration, recorderHighlightSeconds: recorderHighlights) else {
             // The complete file remains recoverable. Never report it as a
             // committed library row if metadata publication failed.
             throw NativeLibraryError.persistenceFailed
@@ -202,6 +228,7 @@ struct NativeDeletedRecording: Codable, Identifiable {
         let digest = try await withTaskCancellationHandler(operation: { try await hashTask.value }, onCancel: { hashTask.cancel() })
         let identity = NativeRecordingIdentity(serialNumber: "local-audio-" + digest, sessionID: 1)
         if let row = recordingStore.recording(sessionID: 1, serialNumber: identity.serialNumber), recordingStore.audioURL(for: row) != nil {
+            try clearPermanentSuppressionForImport(identity)
             if deletedRecordings.contains(where: { $0.identity == identity }) { try restoreRecording(identity) }
             return identity
         }
@@ -243,8 +270,17 @@ struct NativeDeletedRecording: Codable, Identifiable {
         guard recordingStore.commitImportedAudio(digest: digest, outputURL: destination, duration: duration, title: title) else {
             throw NativeLibraryError.persistenceFailed
         }
+        try clearPermanentSuppressionForImport(identity)
         reloadLibrary()
         return identity
+    }
+
+    private func clearPermanentSuppressionForImport(_ identity: NativeRecordingIdentity) throws {
+        guard purgedRecordings.contains(identity) else { return }
+        let next = purgedRecordings.subtracting([identity])
+        try JSONEncoder().encode(next).write(to: purgeURL, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: purgeURL.path)
+        purgedRecordings = next
     }
 
     func localHistory(for identity: NativeRecordingIdentity) async throws -> [AIProcessingResult] {
@@ -288,7 +324,6 @@ struct NativeDeletedRecording: Codable, Identifiable {
 
     func reloadFormats() {
         formats = formatStore.all
-        deletedFormats = formatStore.deleted
     }
 
     func createFormat(title: String, prompt: String) throws -> VectaSummaryInterpretation {
@@ -304,11 +339,6 @@ struct NativeDeletedRecording: Codable, Identifiable {
     func deleteFormat(_ format: VectaSummaryInterpretation) throws {
         defer { reloadFormats() }
         _ = try formatStore.delete(id: format.id, expectedRevision: format.revision)
-    }
-
-    func restoreFormat(_ format: VectaSummaryInterpretation) throws {
-        defer { reloadFormats() }
-        _ = try formatStore.restore(id: format.id, expectedRevision: format.revision)
     }
 }
 
