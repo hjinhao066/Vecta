@@ -35,14 +35,20 @@ build79 executable SHA256 is
 `170dba2f0a8015f08770b1da559e46363d13228745c8a476a3cba803a1e46809`.
 Build78 is the sole local rollback. The app was not launched during replacement.
 
-**Build79 is not public yet.** Public `main` now identifies its exact reviewed
-source commit `5f9bd14d2242b7782df1af39207a32e0dfc234c3`; hosted macOS run
-`38902858240` is in progress. Tag `v0.1.0-build78` remains the earlier source and
-no build78/79 release assets have been uploaded. Before public distribution, the
-matching hosted checks must pass, then create a build79 tag and upload the matching
-DMG, source, licenses, LAME relink kit, SHA256SUMS, release notes and
-artifact-verification report. Clean-user Gatekeeper, Developer ID/notarization,
-physical-device, real-inference and minimum-OS acceptance remain unresolved.
+**Build79 is public as a prerelease.** GitHub `main` and tag
+`v0.1.0-build79` identify release commit
+`6878eb26dccd6295d5d78a7ededaf08196abc60e`. Hosted run
+`38903135907` passed source/security/workflow validation, model-free macOS
+regressions and the full ARM64 Speech/MLX/app/relink/DMG package. The public
+release is https://github.com/olgvroe/Vecta/releases/tag/v0.1.0-build79.
+
+Exactly seven matching assets were uploaded: DMG, source, component licenses,
+LAME source/object/relink kit, SHA256SUMS, release notes and artifact-verification
+report. GitHub's server-side SHA256 digest for every uploaded file matches the
+local final asset. The released source archive is byte-for-byte equal to the
+reviewed public staging tree at the tag. Build78 remains historical. Clean-user
+Gatekeeper, Developer ID/notarization, physical-device, real-inference and
+minimum-OS acceptance remain unresolved.
 
 
 ## Build77 compiler-compatibility correction — 16 October 2026
