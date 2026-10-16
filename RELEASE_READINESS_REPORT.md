@@ -1,13 +1,16 @@
 # Vecta 0.1.0 developer-preview verification
 
-## Build77 compiler-compatibility correction — preparation, 16 October 2026
+## Build77 compiler-compatibility correction — 16 October 2026
 
-Build76 remains installed. Its public release is held: hosted Swift6.3.1 failed twice to type-check the model-download confirmation expression, although local Swift6.4 compiled it. Source/security and model-free macOS checks passed; full hosted packaging did not. No failed CI artifact is accepted.
+Build77 is installed after a fresh verified backup and atomic replacement; executable SHA256 `83eb930a7472b6645c51cbc91c102b754e2a419ee56f7342e96560b6f6941961`. Candidate/installed/rollback inventories, strict/deep signatures, all protected data/model/settings and backup bytes/modes match. The app was not launched by installation. Build76 is retained for rollback.
 
-Build77 decomposes that same confirmation message into intermediate strings and an explicitly typed Int64 total, outside the SwiftUI expression. It changes no capture, authorization, download-consent or user-data behavior. Local and hosted verification, signed packaging, protected installation and publication for77 are pending. Build76 source/binary records below remain historical and are not rewritten to claim a77 binary. The unpublished76 draft is not a public release. Existing public65/tag/assets remain unchanged.
+Build76 was not published: hosted Swift6.3.1 failed twice to type-check the model-download confirmation expression, although local Swift6.4 compiled it. Build77 decomposes that same confirmation message into intermediate strings and an explicitly typed Int64 total, outside the SwiftUI expression. Consent, wording, capture, permissions and data behavior are unchanged. No compiler check or security gate was removed.
 
+Build77 full local source checks, 20 compiled native regressions, 31 isolated settings assertions, 163 transport tests, compiled Speech configuration/protocol checks and 18 model-free MLX tests passed. Exact source/link/resource/signature verification and actual LAME relinking passed, with41 resource/36 kit hashes. DMG verification, read-only mount/detach, Finder layout, bundle identity and temporary Applications-copy integrity passed. DMG SHA256 `a9035e6a883a5c095b60830041c318cb2a3b6cc90fc7addc0b69b2bdefb98304`.
 
-Updated: 16 October 2026. Apple Silicon, macOS 15+. Build76 source/package and protected installation evidence is recorded below. Public availability is tracked on the [Releases page](https://github.com/olgvroe/Vecta/releases); build65 is retained unchanged.
+Hosted verification is tracked in the [release pull request checks](https://github.com/olgvroe/Vecta/pull/1/checks), independently of these local results; public publication requires all mandatory checks to succeed. Public availability is recorded on the [Releases page](https://github.com/olgvroe/Vecta/releases). The unpublished76 draft is not a public release, and existing public65/tag/assets remain unchanged. The six refreshed English screenshots use genuine native views with fictional fixtures, not owner content or inference benchmarks.
+
+Apple Development team X5L2952RH6 is verified, not Developer ID/notarization. Clean-user/quarantined first launch, minimum-OS acceptance, actual TCC persistence, reboot/login, real inference and physical-device coverage remain separate/unresolved. No owner data inspection, capture, model download or device operation was performed during packaging or installation.
 
 ## Corrected permission-flow build76 — 16 October 2026
 
