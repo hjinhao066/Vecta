@@ -42,6 +42,16 @@ Evidence:
   the app launched. Library, models and settings were not touched. The Settings
   engine picker was not visually confirmed.
 
+- Published 23 October 2026 as prerelease
+  [v0.1.0-build80](https://github.com/olgvroe/Vecta/releases/tag/v0.1.0-build80),
+  targeting merge commit `26007c6`. The published assets come from a clean
+  `python3 -I Tools/release.py clean ... --version 0.1.0 --build 80` on a
+  GitHub-hosted `macos-26` runner (Xcode 26.4.1), not from the owner's Mac
+  build above, so their hashes differ. Published DMG SHA256
+  `8ee40ee99ac8bff1b1794ef05abacf542a0555c108fed6d04294c03f6faab921`
+  (ad-hoc, not notarized). All seven asset digests reported by GitHub match the
+  published `SHA256SUMS`.
+
 Limits: physical-recorder, clean-user Gatekeeper, Developer ID/notarization and
 real multi-speaker GigaAM acceptance remain open.
 
