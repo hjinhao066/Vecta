@@ -38,16 +38,38 @@ jobs:
           { echo '### Model files'; echo '```'; cat "$RUNNER_TEMP/hashes.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: Build workers
         run: python3 -I Tools/build-workers.py
-      - name: Russian samples
+      - name: Russian samples (one voice, and a two-voice dialogue over several windows)
         run: |
           set -euo pipefail
-          S="$RUNNER_TEMP/samples"; mkdir -p "$S"
-          curl -fsSL --retry 4 -o "$S/example.wav" https://github.com/salute-developers/GigaAM/raw/main/example.wav || true
-          voice="$(say -v '?' | awk '/ru_RU/{print $1; exit}')"
-          if [ -n "$voice" ]; then
-            say -v "$voice" -o "$S/say.aiff" "Привет! Это проверка распознавания русской речи. Сегодня двадцать третье октября, и мы тестируем новую модель."
-            afconvert -f WAVE -d LEF32@16000 -c 1 "$S/say.aiff" "$S/say.wav"; rm "$S/say.aiff"
-          fi
+          S="$RUNNER_TEMP/samples"; mkdir -p "$S" "$RUNNER_TEMP/parts"
+          say -v '?' | grep -i 'ru_RU' || true
+          voices=($(say -v '?' | awk '/ru_RU/{print $1}'))
+          echo "Russian voices: ${voices[*]:-none}" >> "$GITHUB_STEP_SUMMARY"
+          a="${voices[0]}"; b="${voices[1]:-${voices[0]}}"
+          say -v "$a" -o "$RUNNER_TEMP/parts/say.aiff" "Привет! Это проверка распознавания русской речи. Сегодня двадцать третье октября, и мы тестируем новую модель."
+          afconvert -f WAVE -d LEI16@16000 -c 1 "$RUNNER_TEMP/parts/say.aiff" "$S/say.wav"
+          lines=(
+            "$a|Добрый день, коллеги. Давайте начнём наше совещание по запуску нового продукта."
+            "$b|Здравствуйте. У меня есть несколько вопросов по срокам и бюджету проекта."
+            "$a|Хорошо, сначала обсудим сроки. Мы планируем выпустить версию в декабре."
+            "$b|Декабрь звучит реалистично, но тестирование займёт не меньше трёх недель."
+            "$a|Согласен. Тогда предлагаю начать тестирование уже в середине ноября."
+            "$b|Отлично, я подготовлю план и отправлю его всем до пятницы."
+          )
+          i=0; files=()
+          for line in "${lines[@]}"; do
+            v="${line%%|*}"; t="${line#*|}"
+            say -v "$v" -o "$RUNNER_TEMP/parts/$i.aiff" "$t"
+            afconvert -f WAVE -d LEI16@16000 -c 1 "$RUNNER_TEMP/parts/$i.aiff" "$RUNNER_TEMP/parts/$i.wav"
+            files+=("$RUNNER_TEMP/parts/$i.wav"); i=$((i+1))
+          done
+          python3 -I - "$S/dialogue.wav" "${files[@]}" <<'PY'
+          import sys, wave
+          out = wave.open(sys.argv[1], "wb"); out.setnchannels(1); out.setsampwidth(2); out.setframerate(16000)
+          for path in sys.argv[2:]:
+              w = wave.open(path, "rb"); out.writeframes(w.readframes(w.getnframes())); out.writeframes(b"\0\0" * 12000)
+          out.close()
+          PY
           ls -la "$S"
       - name: Recognize with VectaMLX --gigaam-speech
         run: |
@@ -56,20 +78,55 @@ jobs:
           for audio in "$RUNNER_TEMP"/samples/*.wav; do
             name="$(basename "$audio" .wav)"; work="$RUNNER_TEMP/run-$name"; mkdir -p "$work"
             digest="$(shasum -a 256 "$audio" | cut -d' ' -f1)"
-            printf '{"mode":"gigaam_speech","audio":"%s","checkpoint":"%s/checkpoint.json","digest":"%s","checkpoint_version":1,"decoding_policy":"gigaam-v3-e2e-rnnt-v1","chunk_seconds":20,"overlap_seconds":2}' "$audio" "$work" "$digest" > "$work/in.json"
+            printf '{"mode":"gigaam_speech","audio":"%s","checkpoint":"%s/speech-gigaam-v3-ru-%s.json","digest":"%s","checkpoint_version":1,"decoding_policy":"gigaam-v3-e2e-rnnt-v1","chunk_seconds":20,"overlap_seconds":2}' "$audio" "$work" "$digest" "$digest" > "$work/in.json"
             start=$(date +%s)
             "$MLX" --gigaam-speech "$RUNNER_TEMP/gigaam" "$work/events.json" < "$work/in.json" > "$work/out.json"
             end=$(date +%s)
-            python3 -I - "$work" "$name" "$((end-start))" <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+            python3 -I - "$work/speech-gigaam-v3-ru-$digest.json" "$name" "$((end-start))" "$work/out.json" <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
           import json, sys
-          work, name, wall = sys.argv[1:]
-          c = json.load(open(work + "/checkpoint.json"))
+          path, name, wall, out = sys.argv[1:]
+          c = json.load(open(path))
           print(f"### {name}: {c['duration']:.1f}s audio, wall {wall}s, decode {c['seconds']:.2f}s, completed {c['completed']}")
           print("Text: " + "".join(w["text"] for w in c["words"]).strip())
           print("First words: " + ", ".join(f"{w['text'].strip()}@{w['start']:.2f}-{w['end']:.2f}" for w in c["words"][:8]))
-          print("Summary: " + open(work + "/out.json").read())
+          print("Summary: " + open(out).read())
           PY
           done
+      - name: Download pinned SpeakerKit files (runner temp only)
+        run: |
+          set -euo pipefail
+          python3 -I - "$RUNNER_TEMP/speaker" <<'PY'
+          import hashlib, json, os, sys, urllib.request
+          root = sys.argv[1]
+          model = [m for m in json.load(open("AI/Resources/models-mlx.json"))["models"] if m["id"] == "speaker"][0]
+          for f in model["files"]:
+              target = os.path.join(root, f["name"]); os.makedirs(os.path.dirname(target), exist_ok=True)
+              data = urllib.request.urlopen(f["url"]).read()
+              assert len(data) == f["size"] and hashlib.sha256(data).hexdigest() == f["sha256"], f["name"]
+              open(target, "wb").write(data)
+          print("speaker files", len(model["files"]))
+          PY
+      - name: Diarization and transcript assembly via VectaSpeech (GigaAM checkpoint)
+        run: |
+          set -euo pipefail
+          SPEECH="$(python3 -I -c 'import json;print(json.load(open(".build/worker-build.json"))["speechBuild"])')/release/VectaSpeech"
+          audio="$RUNNER_TEMP/samples/dialogue.wav"; work="$RUNNER_TEMP/run-dialogue"
+          digest="$(shasum -a 256 "$audio" | cut -d' ' -f1)"
+          python3 -I - "$work/request.json" "$digest" <<'PY'
+          import json, sys, uuid
+          json.dump({"version": 1, "id": str(uuid.uuid4()).upper(), "recordingID": "ci-dialogue", "audioFilename": "dialogue.wav",
+                     "audioSHA256": sys.argv[2], "provider": "local",
+                     "format": {"id": "custom_" + str(uuid.uuid4()).lower(), "title": "CI", "prompt": "CI", "revision": 1},
+                     "createdAt": 0, "summaryOnly": False, "speechEngine": "gigaam"}, open(sys.argv[1], "w"))
+          PY
+          "$SPEECH" "$work/request.json" "$audio" "" "$RUNNER_TEMP/speaker" "" "$work/result.json"
+          python3 -I - "$work/result.json" <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json, sys
+          r = json.load(open(sys.argv[1]))
+          print(f"### Diarized dialogue: stage {r.get('stage')}, error {r.get('error')}")
+          for s in r.get("segments", []):
+              print(f"- {s.get('speaker', s.get('speakerID'))} [{s.get('start', 0):.1f}-{s.get('end', 0):.1f}] {s.get('text')}")
+          PY
   release:
     name: Build 80 release (registry pinned in-job)
     runs-on: macos-26

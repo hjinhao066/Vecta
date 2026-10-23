@@ -69,6 +69,10 @@ struct LocalAIFileStore {
         return try JSONDecoder().decode(AISpeechEngineID.self, from: Data(contentsOf: url))
     }
     func setSpeechEngine(_ value: AISpeechEngineID) throws {
+        // Settings can be changed before the processing folder exists.
+        if !FileManager.default.fileExists(atPath: root.path) {
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        }
         try prepare(); try write(value, to: local.appendingPathComponent("speech-engine.json"))
     }
     func visualModel() throws -> AISummaryModelID {
