@@ -11,7 +11,7 @@ meetings, and export visual or PDF reports when you need to share the result.
 **Recording content is not sent to cloud inference, and Vecta has no cloud-inference
 fallback.** The interface supports English and Russian.
 
-[Download Vecta 0.1.0 build 79](https://github.com/olgvroe/Vecta/releases/tag/v0.1.0-build79)
+[Download Vecta 0.1.0 build 80](https://github.com/olgvroe/Vecta/releases/tag/v0.1.0-build80)
 · [Installation](docs/INSTALL.md)
 · [Build from source](docs/BUILD.md)
 
