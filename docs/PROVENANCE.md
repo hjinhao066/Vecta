@@ -10,6 +10,14 @@ Serialized recording DTOs, some storage/export/format helpers and compatibility 
 
 Product authorship and third-party source licenses coexist. Removing a Git remote or starting a new history cannot remove the license obligations of retained code.
 
+## GigaAM v3 MLX runtime (23 October 2026)
+
+`AI/MLX/Sources/VectaMLX/GigaAM.swift` and `GigaAMSpeech.swift` were written for
+Vecta in Swift/MLX. They follow the architecture of the MIT-licensed reference
+implementation [salute-developers/GigaAM](https://github.com/salute-developers/GigaAM)
+and the weight layout of its MLX converter (`misteral/GigaAM`, `mlx_convert/`, MIT).
+No Python or PyTorch source is shipped; no weights are bundled.
+
 ## Legacy inference retirement (14 October 2026)
 
 The CMake/QwenWorker and exclusively C++ schema/prompt headers were removed from

@@ -7,6 +7,8 @@
 - Local WhisperKit/SpeakerKit speech, voice identity confirmation/merge,
   processing history, cancellation and checkpoint recovery.
 - MLX-only Qwen3.5 4B/9B text/visual summaries, recording assistant and library answers.
+- Optional GigaAM v3 (Sber, MIT) speech recognition on MLX for Russian speech, selectable
+  next to Whisper; SpeakerKit diarization, checkpoints and all later stages are shared.
 - English/Russian UI and prompt language snapshots, light/dark native appearance.
 - Removed legacy VectaQwen, C++ inference helpers, CMake and mandatory llama.cpp
   checkout from production builds/tests/packaging. No archived model-weight deletion.

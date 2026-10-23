@@ -14,6 +14,10 @@ import Tokenizers
     static var serving=false
     static func main() async {
         do {
+            if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "--gigaam-speech" {
+                try await GigaAMSpeech.run()
+                return
+            }
             if CommandLine.arguments.contains("--serve-library") {
                 serving=true
                 while let line=readLine() {

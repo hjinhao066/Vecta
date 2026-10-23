@@ -150,6 +150,8 @@ final class VectaLocalAudioExporter {
                         format: interpretation, createdAt: Date(), summaryOnly: transcriptRequestID != nil, transcriptRequestID: transcriptRequestID, summaryModel: try (automaticSettings?.model ?? store.summaryModel()))
                     request.outputLanguage=VL.language.rawValue
                     request.conference=automaticSettings?.conference
+                    // Freeze the recognition engine with the job; Whisper requests keep the legacy shape.
+                    if transcriptRequestID == nil, try store.speechEngine() == .gigaam { request.speechEngine = .gigaam }
                     request.summaryTemplate=summaryTemplate
                     request.visualEnabled=try (visualEnabled ?? automaticSettings?.visual ?? store.automaticAISettings().visual)
                     request.visualSummaryModel=request.selectedSummaryModel

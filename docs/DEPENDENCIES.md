@@ -40,13 +40,15 @@ No PLAUD SDK frameworks or old hosted-processing backend are shipped.
 
 ## Models are a separate installation
 
-Whisper, SpeakerKit, Whisper tokenizer and MLX Qwen4B/9B manifests pin immutable
+Whisper, SpeakerKit, Whisper tokenizer, GigaAM v3 and MLX Qwen4B/9B manifests pin immutable
 revisions, file sizes and SHA256. Downloads require explicit user action; weights
 are not in source/app/DMG. Each model has its own declared license and source URL;
 framework MIT does not cover weights. SpeakerKit's CC-BY-4.0 publisher/source/license
 attribution is retained in Licenses/SpeakerKit-weights-NOTICE.txt. Whisper/CoreML
 and tokenizer/model notices must be checked against their pinned source cards when
-updating. Both Qwen3.5 model entries declare Apache-2.0.
+updating. Both Qwen3.5 model entries declare Apache-2.0. GigaAM v3 E2E RNN-T weights
+(ai-sage/GigaAM-v3, MIT) are installed from the pinned MLX conversion
+`al-bo/gigaam-v3-e2e-rnnt-mlx`, which declares the upstream MIT license.
 
 ## Static LAME distribution
 

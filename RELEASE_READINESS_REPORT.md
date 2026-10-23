@@ -7,6 +7,45 @@ The shipped application code is unchanged from77. The library-search fixture now
 All20 revised native executable regressions passed locally on synthetic data. Package, protected installation and public availability are separate evidence: consult the matching release notes/artifact-verification.json and [required hosted checks](https://github.com/olgvroe/Vecta/pull/1/checks). Source or local fixture success alone is not a public-release or installation claim. Build77 hosted packaging compiled both apps but failed on the old fixture; builds76/77 remained unpublished. The prior build77 installation evidence below is historical, not a claim that changed test sources match its frozen build snapshot.
 
 
+## Build80 GigaAM v3 Russian speech engine — 23 October 2026
+
+Build80 adds an optional second speech-recognition engine: Sber GigaAM v3
+(E2E RNN-T with punctuation, MIT) running on MLX inside the existing VectaMLX
+worker. Settings → Local AI offers Whisper (default, unchanged) or GigaAM v3.
+GigaAM writes the same resumable speech checkpoint as Whisper (20 s windows,
+2 s overlap, decoding policy `gigaam-v3-e2e-rnnt-v1`); VectaSpeech then runs the
+unchanged global SpeakerKit diarization, word attribution and transcript
+assembly, so voices, summaries, the assistant and exports are shared. Model files
+are pinned in `AI/Resources/models*.json`: `al-bo/gigaam-v3-e2e-rnnt-mlx` revision
+`9488b39159c6d30f0fbaef1e41459f1e078daf30`, `model.safetensors` 445099810 B
+SHA256 `54295fab7b860459949fd16f1481cd67202680ef76d54020591a849026bc2515`,
+`config.json` 17487 B SHA256
+`2091108f275146f7729e1cc36a93cbfee11c9cf2f066934d76bbba2d6a013b65`.
+Downloading it remains an explicit user action.
+
+Evidence:
+
+- Full local `python3 -I Tools/release.py build dist/b80 --version 0.1.0 --build 80`
+  on the owner's Apple Silicon Mac passed every automated gate. DMG
+  `Vecta-0.1.0-macOS-arm64.dmg`, SHA256
+  `5016ea7115b76d7115b839961e50505df87b56bd7309ca658600c717dd72f07b`
+  (ad-hoc signature, not notarized; not published).
+- Real inference with the pinned weights on GitHub `macos-26` and on the owner's
+  Mac: a 7 s synthetic Russian phrase and a 32–33 s six-turn dialogue were
+  recognized word for word with punctuation and word timings (Mac: 0.16 s and
+  2.8 s decode).
+- VectaSpeech completed diarization and assembly from the GigaAM checkpoint. With
+  only one Russian system voice (second speaker = pitch-shifted copy), the first
+  four turns were attributed correctly; the last two produced extra speaker
+  labels. Real two-person recordings are NOT TESTED.
+- Installed build80 replaced build79 in /Applications (old bundle moved to Trash);
+  the app launched. Library, models and settings were not touched. The Settings
+  engine picker was not visually confirmed.
+
+Limits: physical-recorder, clean-user Gatekeeper, Developer ID/notarization and
+real multi-speaker GigaAM acceptance remain open.
+
+
 ## Build79 recording-safety correction — 16 October 2026
 
 Build79 supersedes build78 for future distribution. It corrects a reviewed recording

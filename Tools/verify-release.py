@@ -132,8 +132,8 @@ def verify(build):
     pack['verify_runtime'](workers, worker_paths); pack['check_profiles'](workers)
     require(any(workers.rglob('*.metallib')), 'MLX Metal resources missing')
     registry = json.loads((workers/'models.json').read_text())
-    require({m['id'] for m in registry['models']} == {'whisper', 'speaker', 'tokenizer', 'qwen4b', 'qwen9b'}, 'Unexpected production model registry')
-    require(all(m.get('backend') == 'mlx' for m in registry['models'] if m['id'].startswith('qwen')), 'Non-MLX production backend')
+    require({m['id'] for m in registry['models']} == {'whisper', 'speaker', 'tokenizer', 'gigaam', 'qwen4b', 'qwen9b'}, 'Unexpected production model registry')
+    require(all(m.get('backend') == 'mlx' for m in registry['models'] if m['id'].startswith('qwen') or m['id'] == 'gigaam'), 'Non-MLX production backend')
     forbidden = {'.gguf', '.safetensors', '.mp3', '.wav', '.m4a', '.sqlite', '.db', '.profraw', '.pem', '.key', '.log'}
     for path in app.rglob('*'):
         require(not path.is_symlink(), 'Unexpected app bundle link')

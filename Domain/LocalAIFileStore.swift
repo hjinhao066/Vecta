@@ -61,6 +61,20 @@ struct LocalAIFileStore {
     func setSummaryModel(_ value: AISummaryModelID) throws {
         try prepare(); try write(value, to: local.appendingPathComponent("summary-model.json"))
     }
+    /// Recognition engine for new recordings. Absent file: Whisper (previous behaviour).
+    func speechEngine() throws -> AISpeechEngineID {
+        let url = local.appendingPathComponent("speech-engine.json")
+        guard FileManager.default.fileExists(atPath: url.path) else { return .whisper }
+        try validateSmallFile(url)
+        return try JSONDecoder().decode(AISpeechEngineID.self, from: Data(contentsOf: url))
+    }
+    func setSpeechEngine(_ value: AISpeechEngineID) throws {
+        // Settings can be changed before the processing folder exists.
+        if !FileManager.default.fileExists(atPath: root.path) {
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        }
+        try prepare(); try write(value, to: local.appendingPathComponent("speech-engine.json"))
+    }
     func visualModel() throws -> AISummaryModelID {
         let url=local.appendingPathComponent("visual-model.json")
         guard FileManager.default.fileExists(atPath:url.path) else {return .qwen9b}

@@ -326,6 +326,29 @@
       ]
     },
     {
+      "id": "gigaam",
+      "title": "GigaAM v3 · E2E RNN-T",
+      "variant": "MLX · FP16",
+      "repository": "al-bo/gigaam-v3-e2e-rnnt-mlx",
+      "revision": "9488b39159c6d30f0fbaef1e41459f1e078daf30",
+      "license": "MIT",
+      "files": [
+        {
+          "name": "config.json",
+          "url": "https://huggingface.co/al-bo/gigaam-v3-e2e-rnnt-mlx/resolve/9488b39159c6d30f0fbaef1e41459f1e078daf30/config.json",
+          "sha256": "2091108f275146f7729e1cc36a93cbfee11c9cf2f066934d76bbba2d6a013b65",
+          "size": 17487
+        },
+        {
+          "name": "model.safetensors",
+          "url": "https://huggingface.co/al-bo/gigaam-v3-e2e-rnnt-mlx/resolve/9488b39159c6d30f0fbaef1e41459f1e078daf30/model.safetensors",
+          "sha256": "54295fab7b860459949fd16f1481cd67202680ef76d54020591a849026bc2515",
+          "size": 445099810
+        }
+      ],
+      "backend": "mlx"
+    },
+    {
       "id": "qwen4b",
       "title": "Qwen3.5-4B",
       "variant": "MLX · 4-bit",

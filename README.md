@@ -141,8 +141,10 @@ ask questions across saved transcripts.
 - Several GB of free disk space for models, recordings and processing files.
 - Models are installed separately through an explicit user action.
 
-Speech uses WhisperKit large-v3 Turbo and SpeakerKit. Summaries and assistant
-features use MLX Qwen3.5 4B/9B. The interface is available in English and Russian;
+Speech recognition uses either WhisperKit large-v3 Turbo (default; English and
+other languages) or Sber's GigaAM v3 on MLX (Russian speech, punctuated), chosen
+in Settings → Local AI. Both engines share SpeakerKit speaker separation and every
+downstream feature. Summaries and assistant features use MLX Qwen3.5 4B/9B. The interface is available in English and Russian;
 new processing jobs retain their selected language policy.
 
 ## Install

@@ -19,11 +19,11 @@ struct LocalModelDefinition: Codable, Equatable, Identifiable {
     var backend: String? = nil
     var size: Int64 { files.reduce(0) { $0 + $1.size } }
     func validate() throws {
-        guard ["whisper", "speaker", "tokenizer", "qwen4b", "qwen9b"].contains(id), revision.count == 40,
+        guard ["whisper", "speaker", "tokenizer", "gigaam", "qwen4b", "qwen9b"].contains(id), revision.count == 40,
               revision.allSatisfy({ "0123456789abcdef".contains($0) }),
               !files.isEmpty, Set(files.map(\.name)).count == files.count,
               ["Apache-2.0", "MIT", "CC-BY-4.0"].contains(license) else { throw LocalModelError.invalidManifest }
-        guard !["qwen4b", "qwen9b"].contains(id) || backend == "mlx" else { throw LocalModelError.invalidManifest }
+        guard !["qwen4b", "qwen9b", "gigaam"].contains(id) || backend == "mlx" else { throw LocalModelError.invalidManifest }
         for file in files {
             guard !file.name.isEmpty, !file.name.hasPrefix("/"), !file.name.split(separator:"/",omittingEmptySubsequences:false).contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }), !file.name.contains("\\"),
                   file.url.scheme == "https", file.url.host == "huggingface.co",
@@ -41,8 +41,10 @@ struct LocalModelRegistry: Codable {
     let models: [LocalModelDefinition]
     static func load(from url: URL) throws -> Self {
         let registry = try JSONDecoder().decode(Self.self, from: Data(contentsOf: url))
-        guard registry.version == 1, Set(registry.models.map(\.id)) == Set(["whisper", "speaker", "tokenizer", "qwen4b", "qwen9b"]),
-              registry.models.count == 5 else { throw LocalModelError.invalidManifest }
+        // GigaAM is an optional sixth engine; older catalogs without it stay valid.
+        let base = Set(["whisper", "speaker", "tokenizer", "qwen4b", "qwen9b"]), ids = Set(registry.models.map(\.id))
+        guard registry.version == 1, ids == base && registry.models.count == 5 || ids == base.union(["gigaam"]) && registry.models.count == 6
+        else { throw LocalModelError.invalidManifest }
         for model in registry.models { try model.validate() }
         return registry
     }

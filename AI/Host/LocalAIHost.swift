@@ -8,6 +8,8 @@ import AVFoundation
 @MainActor final class LocalAIHost: ObservableObject {
     @Published var provider: AIProviderID = .local
     @Published var summaryModel: AISummaryModelID = .qwen4b
+    /// Recognition engine for new recordings; each request freezes its own copy.
+    @Published private(set) var speechEngine: AISpeechEngineID = .whisper
     var visualModel:AISummaryModelID {summaryModel}
     @Published var automaticSettings = AIAutomaticSettings()
     @Published var statuses: [String: LocalModelStatus] = [:]
@@ -177,6 +179,7 @@ import AVFoundation
         manager = try LocalModelManager(registry: registry, root: modelsRoot, makeDownloader: makeDownloader)
         if let data=try? Data(contentsOf:measurementsURL),data.count<1000000 {measurements=(try? JSONDecoder().decode([AIStageMeasurement].self,from:data)) ?? []}
         provider = .local; summaryModel = try store.summaryModel(); automaticSettings = try store.automaticAISettings()
+        speechEngine = (try? store.speechEngine()) ?? .whisper
         if !summaryModel.isProductionModel { message=AIProcessingError.retiredModel.localizedDescription }
         automaticSettings.model=summaryModel
         for model in registry.models { statuses[model.id] = LocalModelStatus(modelID: model.id, state: .verifying, received: 0, total: model.size, error: nil) }
@@ -231,6 +234,27 @@ import AVFoundation
         do { try store.setSummaryModel(value); summaryModel = value; automaticSettings.model=value;try store.setAutomaticAISettings(automaticSettings); message = nil }
         catch { message = VL.text("Не удалось сохранить выбранную модель.") }
         if activeRequest==nil {Task{await closeLibraryRuntime()}}
+    }
+    /// Changes only future jobs. Choosing GigaAM releases the warm Whisper process.
+    func selectSpeechEngine(_ value: AISpeechEngineID) {
+        guard value != speechEngine else { return }
+        do { try store.setSpeechEngine(value); speechEngine = value; message = nil }
+        catch { message = VL.text("Не удалось сохранить выбранную модель распознавания."); return }
+        queueDirty = true
+        Task { [weak self] in
+            guard let self else { return }
+            if value == .gigaam {
+                await self.cancelSpeechWarmup()
+                if self.activeRequest == nil { await self.closeSpeechRuntime() }
+            } else {
+                await self.prewarmSpeechIfEligible()
+            }
+        }
+    }
+    /// Installs only what the selected engine is missing; no download starts implicitly.
+    func installRecognition() {
+        guard supported else { return }
+        for id in speechEngine.modelIDs() where statuses[id]?.state != .installed { install(id) }
     }
     func selectVisualModel(_ value:AISummaryModelID) {
         selectSummaryModel(value)
@@ -289,14 +313,14 @@ import AVFoundation
         }
     }
     func modelsNeeded(reuseTranscript: Bool, model: AISummaryModelID? = nil) -> [String] {
-        [(model ?? summaryModel).rawValue] + (reuseTranscript ? [] : LocalModelManager.speechIDs)
+        [(model ?? summaryModel).rawValue] + (reuseTranscript ? [] : speechEngine.modelIDs())
     }
     func isModelBusy(_ id: String) -> Bool {
         downloads[id] != nil || [.preparing, .downloading, .verifying, .deleting].contains(statuses[id]?.state)
     }
     private func modelsNeeded(for request: AIProcessingRequest) -> [String] {
         (request.wantsSummary ? [request.selectedSummaryModel.rawValue] : []) +
-            (request.summaryOnly ? [] : ["whisper", "tokenizer"] + (request.wantsDiarization ? ["speaker"] : []))
+            (request.summaryOnly ? [] : request.selectedSpeechEngine.modelIDs(diarization: request.wantsDiarization))
     }
     func install(_ id: String) {
         guard supported, registry.models.contains(where: { $0.id == id }), downloads[id] == nil,
@@ -481,7 +505,7 @@ import AVFoundation
                 result.recognitionSeconds = source.recognitionSeconds; result.unmatchedText = source.unmatchedText
             } else {
                 var speechModels: [String:URL] = [:]
-                let speechIDs = ["whisper", "tokenizer"] + (request.wantsDiarization ? ["speaker"] : [])
+                let speechIDs = request.selectedSpeechEngine.modelIDs(diarization: request.wantsDiarization)
                 do {
                     for id in speechIDs { speechModels[id] = try await manager.acquire(id) }
                     let audio = root.appendingPathComponent("Inbox").appendingPathComponent(request.audioFilename)
@@ -491,7 +515,14 @@ import AVFoundation
                     guard attributes.isRegularFile == true, attributes.isSymbolicLink != true else { throw AIProcessingError.invalidRequest }
                     let file = LocalModelFile(name: request.audioFilename, url: audio, sha256: request.audioSHA256, size: Int64(attributes.fileSize ?? 0))
                     try await Task.detached { try LocalModelIntegrity.verify(file, at: audio) }.value
-                    if fastTranscriptionEnabled {
+                    if request.selectedSpeechEngine == .gigaam {
+                        // MLX recognizes words into the shared speech checkpoint; the Speech
+                        // worker then runs the same diarization/attribution as for Whisper.
+                        try await recognizeWithGigaAM(request: request, audio: audio, duration: audioDuration,
+                            model: speechModels["gigaam"]!, output: store.resultURL(request.id))
+                        _ = try await execute(resources.appendingPathComponent("LocalAI/VectaSpeech"),
+                            arguments: [store.requestURL(request.id).path, audio.path, "", speechModels["speaker"]?.path ?? "", "", store.resultURL(request.id).path])
+                    } else if fastTranscriptionEnabled {
                         try await recognizeWithPersistentSpeech(request: request, audio: audio,
                             whisper: speechModels["whisper"]!, speaker: speechModels["speaker"],
                             tokenizer: speechModels["tokenizer"]!, output: store.resultURL(request.id))
@@ -744,7 +775,7 @@ import AVFoundation
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
               ProcessInfo.processInfo.environment["VECTA_VERIFICATION_PREFERENCES"] == nil,
               !CommandLine.arguments.contains(where: { $0.hasPrefix("--verify-") }),
-              startupComplete, speechWarmupFailures < 2, fastTranscriptionEnabled, !stopped, activeRequest == nil, operation == nil,
+              startupComplete, speechWarmupFailures < 2, fastTranscriptionEnabled, speechEngine == .whisper, !stopped, activeRequest == nil, operation == nil,
               libraryWaitingCount == 0, speechRuntime == nil, speechRuntimeClosing == nil,
               speechWarmup == nil,
               statuses["whisper"]?.state == .installed,
@@ -760,7 +791,7 @@ import AVFoundation
     }
 
     private func warmSpeechRuntime() async {
-        guard fastTranscriptionEnabled, !stopped, activeRequest == nil, operation == nil,
+        guard fastTranscriptionEnabled, speechEngine == .whisper, !stopped, activeRequest == nil, operation == nil,
               libraryWaitingCount == 0, speechRuntime == nil,
               statuses["whisper"]?.state == .installed,
               statuses["tokenizer"]?.state == .installed else { return }
@@ -831,6 +862,27 @@ import AVFoundation
         if process === worker.process { process = nil }
         speechRuntimeClosing = nil
         closeSpeechAfterActive = false
+    }
+
+    /// GigaAM v3 runs in the MLX worker (Metal resources are bundled there). It
+    /// writes the resumable speech checkpoint; finished windows arrive as events.
+    private func recognizeWithGigaAM(request: AIProcessingRequest, audio: URL, duration: Double, model: URL, output: URL) async throws {
+        await cancelSpeechWarmup()
+        await closeSpeechRuntime()
+        var state = (try? store.result(request.id)) ?? AIProcessingResult(version: 1, request: request, stage: .queued,
+            transcript: nil, segments: [], summary: nil, error: nil, updatedAt: Date(), duration: nil, recognitionSeconds: nil, summarySeconds: nil)
+        guard state.request == request else { throw AIProcessingError.invalidRequest }
+        state.stage = .recognizing; state.duration = duration; state.error = nil; state.updatedAt = Date()
+        state.recognitionProgress = nil
+        observeProgress(state); try persistResult(state)
+        var input: [String: Any] = ["mode": "gigaam_speech", "audio": audio.path,
+            "checkpoint": request.speechCheckpointURL(for: output).path, "digest": request.audioSHA256,
+            "checkpoint_version": request.speechCheckpointVersion, "decoding_policy": request.speechDecodingPolicy,
+            "chunk_seconds": request.speechWindowSeconds.chunk, "overlap_seconds": request.speechWindowSeconds.overlap]
+        if let language = request.outputLanguage { input["output_language"] = language }
+        let data = try JSONSerialization.data(withJSONObject: input, options: .sortedKeys)
+        _ = try await execute(resources.appendingPathComponent("LocalAI/VectaMLX"), arguments: ["--gigaam-speech", model.path], input: data)
+        try Task.checkCancellation()
     }
 
     private func recognizeWithPersistentSpeech(request: AIProcessingRequest, audio: URL,

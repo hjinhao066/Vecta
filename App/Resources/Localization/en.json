@@ -50,7 +50,6 @@
   " · осталось записей: %@": " · recordings remaining: %@",
   "В очереди обработки: %@": "Queued for processing: %@",
   "Обработка записи остановлена: ": "Recording processing stopped: ",
-  "Очередь сохранена. Для обработки установите WhisperKit и SpeakerKit и выбранную модель Qwen в разделе «Локальный ИИ».": "The queue has been saved. To process recordings, install WhisperKit, SpeakerKit and your chosen Qwen model in Local AI.",
   "Локальная обработка · осталось записей: %@": "Local processing · recordings remaining: %@",
   "Не удалось обработать запись: ": "Could not process recording: ",
   "Выбрано": "Selected",
@@ -1177,5 +1176,17 @@
   "macOS не нашла Vecta для автозапуска. Откройте приложение из папки «Программы» и попробуйте снова.": "macOS could not find Vecta for login startup. Open the app from Applications and try again.",
   "Не удалось включить автозапуск Vecta. Проверьте раздел «Объекты входа» системных настроек macOS.": "Could not enable Vecta login startup. Check Login Items in macOS System Settings.",
   "Не удалось выключить автозапуск Vecta. Проверьте раздел «Объекты входа» системных настроек macOS.": "Could not disable Vecta login startup. Check Login Items in macOS System Settings.",
-  "Автоматическая запись ожидает разрешений macOS. Нажмите «Начать запись», чтобы настроить доступ, или откройте системные настройки.": "Automatic recording is waiting for macOS permissions. Choose Start recording to set up access, or open System Settings."
+  "Автоматическая запись ожидает разрешений macOS. Нажмите «Начать запись», чтобы настроить доступ, или откройте системные настройки.": "Automatic recording is waiting for macOS permissions. Choose Start recording to set up access, or open System Settings.",
+  "Очередь сохранена. Для обработки установите выбранную модель распознавания, SpeakerKit и выбранную модель Qwen в разделе «Локальный ИИ».": "The queue has been saved. To process recordings, install the selected speech recognition model, SpeakerKit and your chosen Qwen model in Local AI.",
+  "Распознавание речи": "Speech recognition",
+  "Выберите модель для новых записей": "Choose the model for new recordings",
+  "Модель распознавания речи": "Speech recognition model",
+  "Разделение реплик по голосам (SpeakerKit), саммари, инфографика, ассистент и экспорт работают одинаково с обеими моделями. Выбор применяется к новым обработкам, уже готовые расшифровки не меняются.": "Speaker separation (SpeakerKit), summaries, infographics, the assistant and export work the same with both models. The choice applies to new processing; existing transcripts are not changed.",
+  "Установить GigaAM v3 и SpeakerKit": "Install GigaAM v3 and SpeakerKit",
+  "SpeakerKit нужен для разделения по голосам. WhisperKit для GigaAM скачивать не нужно.": "SpeakerKit is needed to separate speakers. GigaAM does not need WhisperKit.",
+  "GigaAM v3 · русская речь": "GigaAM v3 · Russian speech",
+  "Whisper · английская и другие языки": "Whisper · English and other languages",
+  "Модель Сбера GigaAM v3 на MLX. Распознаёт только русский язык, расставляет пунктуацию и обычно точнее Whisper на русской речи.": "Sber's GigaAM v3 running on MLX. Recognizes Russian only, adds punctuation and is usually more accurate than Whisper on Russian speech.",
+  "WhisperKit · Whisper large-v3 Turbo. Многоязычная модель, подходит для английской речи и смешанных записей.": "WhisperKit · Whisper large-v3 Turbo. A multilingual model for English speech and mixed-language recordings.",
+  "Не удалось сохранить выбранную модель распознавания.": "Could not save the selected speech recognition model."
 }

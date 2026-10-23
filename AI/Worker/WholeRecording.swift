@@ -108,7 +108,8 @@ enum VectaSpeechPipeline {
         }
         let checkpointURL=request.speechCheckpointURL(for:output)
         var completed=0,asrSeconds=0.0
-        let windows=try AIStreamingConfiguration(chunkSeconds:60,overlapSeconds:3,pauseAware:false).windows(duration:duration)
+        let windows=try AIStreamingConfiguration(chunkSeconds:request.speechWindowSeconds.chunk,overlapSeconds:request.speechWindowSeconds.overlap,pauseAware:false).windows(duration:duration)
+        let engineName=request.selectedSpeechEngine == .gigaam ? "GigaAM v3 (MLX)" : "Whisper"
         let checkpointValues=try? checkpointURL.resourceValues(forKeys:[.isRegularFileKey,.isSymbolicLinkKey,.fileSizeKey])
         if checkpointValues?.isRegularFile==true,checkpointValues?.isSymbolicLink != true,
            (checkpointValues?.fileSize ?? 0)<32_000_000,
@@ -128,10 +129,12 @@ enum VectaSpeechPipeline {
         func save(_ complete: Bool) throws {
             state.updatedAt=Date()
             try privateWrite(JSONEncoder().encode(state),output)
-            try privateWrite(JSONEncoder().encode(WholeAlignment(mode:request.wantsDiarization ? "B: independent Whisper windows + global non-exclusive SpeakerKit" : "Whisper windows; diarization disabled by user",phase:phase,duration:duration,complete:complete,rawNonExclusiveTimeline:timeline,words:words,unalignedWords:unaligned,centroids:centroids,numberOfEmbeddings:embeddingCount)),output.appendingPathExtension("alignment.json"))
+            try privateWrite(JSONEncoder().encode(WholeAlignment(mode:request.wantsDiarization ? "B: independent \(engineName) windows + global non-exclusive SpeakerKit" : "\(engineName) windows; diarization disabled by user",phase:phase,duration:duration,complete:complete,rawNonExclusiveTimeline:timeline,words:words,unalignedWords:unaligned,centroids:centroids,numberOfEmbeddings:embeddingCount)),output.appendingPathExtension("alignment.json"))
         }
         try save(false)
         var whisperLoad=0.0
+        // GigaAM recognition runs in the MLX worker before this process starts.
+        if completed < windows.count, request.selectedSpeechEngine == .gigaam { throw AIProcessingError.invalidTranscript }
         if completed < windows.count {
         let loadStart=ProcessInfo.processInfo.systemUptime
         let remainingWindows=windows.count-completed
@@ -268,7 +271,7 @@ enum VectaSpeechPipeline {
         try save(true)
         await speaker.unloadModels()
         let path=ProcessInfo.processInfo.environment["VECTA_ASR_PROFILE_PATH"] ?? output.appendingPathExtension("metrics.json").path
-        let metrics:[String:Any]=["mode":"B","asrSeconds":asrSeconds,"diarizationSeconds":diarizationSeconds,"modelLoadSeconds":whisperLoad+speakerLoad,"chunks":windows.count,"numberOfEmbeddings":embeddingCount!,"numberOfSpeakers":result.speakerCount,"errors":0,"partial":false,"contentCompletenessVerified":false,"sdkInternalErrorCountAvailable":false,"unalignedWords":unaligned.count,"resolvedWords":words.filter{$0.globalID != nil}.count,"totalWords":words.count]
+        let metrics:[String:Any]=["mode":"B","engine":request.selectedSpeechEngine.rawValue,"asrSeconds":asrSeconds,"diarizationSeconds":diarizationSeconds,"modelLoadSeconds":whisperLoad+speakerLoad,"chunks":windows.count,"numberOfEmbeddings":embeddingCount!,"numberOfSpeakers":result.speakerCount,"errors":0,"partial":false,"contentCompletenessVerified":false,"sdkInternalErrorCountAvailable":false,"unalignedWords":unaligned.count,"resolvedWords":words.filter{$0.globalID != nil}.count,"totalWords":words.count]
         if let data=try? JSONSerialization.data(withJSONObject:metrics,options:.prettyPrinted) { try? privateWrite(data,URL(fileURLWithPath:path)) }
         } catch {
             await speaker.unloadModels()

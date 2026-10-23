@@ -21,7 +21,8 @@ private enum SpeechWorkerInput {
                 try Task.checkCancellation(); hash.update(data: data)
             }
             guard hash.finalize().map({ String(format: "%02x", $0) }).joined() == decoded.audioSHA256 else { throw AIProcessingError.invalidRequest }
-            try tokenizerExists(at: tokenizerPath)
+            // GigaAM words come from the MLX worker's checkpoint; no Whisper files are used.
+            if decoded.selectedSpeechEngine == .whisper { try tokenizerExists(at: tokenizerPath) }
             try await VectaSpeechPipeline.runWholeRecording(request: decoded, audio: audio, output: output, duration: duration, speakers: speakersPath, tokenizer: tokenizerPath, whisperModel: whisperModelPath, modelCache: modelCache, eventURL: eventPath.map { URL(fileURLWithPath: $0) })
         } catch {
             if let request {

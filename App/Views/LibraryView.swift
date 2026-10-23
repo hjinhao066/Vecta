@@ -309,7 +309,7 @@ struct NativeSummaryCreationSheet:View {
         guard let host=model.localAI,host.supported else{return VL.text("Локальная обработка доступна с macOS 15.")}
         if !selectedModel.compatible() {return selectedModel.memoryRequirement}
         if host.statuses[selectedModel.rawValue]?.state != .installed {return VL.text("Модель «")+selectedModel.title+VL.text("» не установлена. Скачайте её в разделе «Локальный ИИ».")}
-        if NativeSummarySelection.transcriptSource(model.analyses)==nil && !["whisper","speaker","tokenizer"].allSatisfy({host.statuses[$0]?.state == .installed}) {return VL.text("Для первой обработки установите модели распознавания.")}
+        if NativeSummarySelection.transcriptSource(model.analyses)==nil && !host.speechEngine.modelIDs().allSatisfy({host.statuses[$0]?.state == .installed}) {return VL.text("Для первой обработки установите модели распознавания.")}
         return nil
     }
     var body:some View {
