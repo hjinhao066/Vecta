@@ -812,8 +812,8 @@ class WorkerPackagingTests(FixtureCase):
             self.assertNotIn('cmake',text.casefold())
         for name in ['models.json','models-mlx.json']:
             models=json.loads((ROOT/'AI/Resources'/name).read_text())['models']
-            self.assertEqual({m['id'] for m in models},{'whisper','speaker','tokenizer','qwen4b','qwen9b'})
-            self.assertTrue(all(m.get('backend')=='mlx' for m in models if m['id'].startswith('qwen')))
+            self.assertEqual({m['id'] for m in models},{'whisper','speaker','tokenizer','gigaam','qwen4b','qwen9b'})
+            self.assertTrue(all(m.get('backend')=='mlx' for m in models if m['id'].startswith('qwen') or m['id']=='gigaam'))
 
 
 class DMGMountTests(FixtureCase):

@@ -59,6 +59,15 @@ import Foundation
         check(defaults.bool(forKey: "VectaLocalAIQueuePaused"), "queue preference also uses the injected suite")
         check(!first.hasActiveWorker && !second.hasActiveWorker && !third.hasActiveWorker, "preferences never launch a worker before host startup")
         check(third.statuses.values.allSatisfy { $0.state == .verifying }, "preference changes neither verify nor download models")
+        check(third.speechEngine == .whisper && !third.modelsNeeded(reuseTranscript: false).contains("gigaam"), "a missing engine preference keeps Whisper")
+        check(third.registry.models.contains { $0.id == "gigaam" && $0.backend == "mlx" && $0.license == "MIT" }, "the catalog pins GigaAM as an MLX model")
+        third.selectSpeechEngine(.gigaam)
+        let fourth = try host()
+        defer { fourth.stop() }
+        check(fourth.speechEngine == .gigaam, "the recognition engine choice survives host recreation")
+        check(Set(fourth.modelsNeeded(reuseTranscript: false)) == Set([fourth.summaryModel.rawValue, "gigaam", "speaker"]), "GigaAM jobs need SpeakerKit but no Whisper files")
+        check(fourth.statuses.values.allSatisfy { $0.state == .verifying } && !fourth.hasActiveWorker, "choosing an engine neither downloads nor launches a worker")
+        fourth.selectSpeechEngine(.whisper)
     }
 
     @MainActor static func main() async throws {

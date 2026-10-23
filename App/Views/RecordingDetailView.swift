@@ -212,7 +212,7 @@ struct NativeRecordingDetail: View {
         guard let host=model.localAI else {return VL.text("Локальный ИИ ещё не готов.")}
         if !host.supported {return VL.text("Локальная обработка доступна с macOS 15.")}
         if host.statuses[host.summaryModel.rawValue]?.state != .installed {return VL.text("Для создания саммари установите модель «")+host.summaryModel.title+VL.text("» в разделе «Локальный ИИ».")}
-        if NativeSummarySelection.transcriptSource(model.analyses)==nil && !["whisper","speaker","tokenizer"].allSatisfy({host.statuses[$0]?.state == .installed}) {return VL.text("Для первой обработки установите модели распознавания в разделе «Локальный ИИ».")}
+        if NativeSummarySelection.transcriptSource(model.analyses)==nil && !host.speechEngine.modelIDs().allSatisfy({host.statuses[$0]?.state == .installed}) {return VL.text("Для первой обработки установите модели распознавания в разделе «Локальный ИИ».")}
         return nil
     }
     private var canStartSummary:Bool {selectedRecipe != nil && model.localAI?.supported == true && (model.localAI?.summaryModel.compatible() ?? false) && !model.analysisBusy && !model.visualRetryBusy}

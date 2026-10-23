@@ -73,6 +73,20 @@ import Foundation
         precondition(paths.count==3);checks+=1
         precondition(base.speechCheckpointURL(for:output).lastPathComponent=="speech-v1-"+base.audioSHA256+".json");checks+=1
         precondition(base.acceptsSpeechCheckpoint(version:1,outputLanguage:nil,decodingPolicy:nil));checks+=1
+        // Engine selection: GigaAM requests keep a separate checkpoint identity and
+        // never reuse Whisper words; legacy requests without the field stay Whisper.
+        precondition(base.speechEngine==nil && base.selectedSpeechEngine == .whisper && base.speechWindowSeconds == (60,3));checks+=1
+        var giga=base;giga.outputLanguage="ru";giga.speechEngine = .gigaam
+        let gigaDecoded=try JSONDecoder().decode(AIProcessingRequest.self,from:JSONEncoder().encode(giga))
+        precondition(gigaDecoded==giga && gigaDecoded.selectedSpeechEngine == .gigaam);checks+=1
+        precondition(giga.speechWindowSeconds == (20,2) && giga.speechDecodingPolicy=="gigaam-v3-e2e-rnnt-v1");checks+=1
+        var whisperRU=base;whisperRU.outputLanguage="ru"
+        precondition(giga.speechCheckpointURL(for:output) != whisperRU.speechCheckpointURL(for:output) && !paths.contains(giga.speechCheckpointURL(for:output)));checks+=1
+        precondition(!giga.acceptsSpeechCheckpoint(version:whisperRU.speechCheckpointVersion,outputLanguage:"ru",decodingPolicy:whisperRU.speechDecodingPolicy));checks+=1
+        precondition(!whisperRU.acceptsSpeechCheckpoint(version:giga.speechCheckpointVersion,outputLanguage:"ru",decodingPolicy:giga.speechDecodingPolicy));checks+=1
+        precondition(giga.acceptsSpeechCheckpoint(version:giga.speechCheckpointVersion,outputLanguage:"ru",decodingPolicy:giga.speechDecodingPolicy));checks+=1
+        precondition(AISpeechEngineID.gigaam.modelIDs(diarization:true)==["gigaam","speaker"] && AISpeechEngineID.gigaam.modelIDs(diarization:false)==["gigaam"]);checks+=1
+        precondition(AISpeechEngineID.whisper.modelIDs(diarization:true)==["whisper","tokenizer","speaker"]);checks+=1
         var invalid=base;invalid.outputLanguage="unsupported"
         do {try invalid.validate();preconditionFailure("Invalid language accepted")} catch {checks+=1}
         print("PASS \(checks) localization/request checks: default English, preferences, catalog rendering, literal interpolation, historical request preservation and isolated speech checkpoint identities. No production preferences or user data accessed.")

@@ -167,6 +167,7 @@ struct NativeAISettings: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 ScreenTitle(title: VL.text("Локальный ИИ"), subtitle: VL.text("Записи и результаты остаются на вашем Mac."))
+                engineCard
                 speechCard
                 HStack { Text(VL.text("Модель для всех задач")).foregroundColor(Ink.secondary); Spacer(); NativeSummaryModelPicker(host: host).frame(width: 210) }
                 Text(VL.text("Выбранная модель используется для саммари, инфографики и AI-ассистента. Выбор модели не запускает скачивание. Распознавание записей — до 6 часов; требуется Apple Silicon и macOS 15+."))
@@ -183,6 +184,33 @@ struct NativeAISettings: View {
             Button(VL.text("Удалить модель"), role: .destructive) { if let removing { if removing == "speech" {host.removeSpeech()} else {host.remove(removing)} }; removing = nil }
             Button(VL.text("Отмена"), role: .cancel) { removing = nil }
         } message: { Text(VL.text("Записи, транскрипты и саммари сохранятся. Для новой обработки модель потребуется установить снова.")) }
+    }
+    /// Recognition engine choice. Diarization, summaries and exports are shared.
+    private var engineCard:some View {
+        let missing=host.speechEngine.modelIDs().filter {host.statuses[$0]?.state != .installed}
+        let busy=missing.contains(where:host.isModelBusy)
+        return VStack(alignment:.leading,spacing:12) {
+            HStack(alignment:.center,spacing:12) {
+                Image(systemName:"text.bubble").font(.system(size:22)).frame(width:38,height:38).background(Ink.elevated).cornerRadius(8)
+                VStack(alignment:.leading,spacing:5) {
+                    Text(VL.text("Распознавание речи")).font(.system(size:18,weight:.semibold))
+                    Text(VL.text("Выберите модель для новых записей")).font(.system(size:12)).foregroundColor(Ink.secondary)
+                }
+                Spacer()
+                Picker(VL.text("Модель распознавания речи"),selection:Binding(get:{host.speechEngine},set:host.selectSpeechEngine)) {
+                    ForEach(AISpeechEngineID.allCases) {engine in Text(engine.title).tag(engine)}
+                }.labelsHidden().frame(width:300)
+            }
+            Text(host.speechEngine.description).font(.system(size:12)).foregroundColor(Ink.secondary).lineSpacing(3)
+            Text(VL.text("Разделение реплик по голосам (SpeakerKit), саммари, инфографика, ассистент и экспорт работают одинаково с обеими моделями. Выбор применяется к новым обработкам, уже готовые расшифровки не меняются.")).font(.system(size:12)).foregroundColor(Ink.muted).lineSpacing(3)
+            if host.speechEngine == .gigaam {
+                if let gigaam=host.registry.models.first(where:{$0.id=="gigaam"}) { modelRow(gigaam) }
+                if !missing.isEmpty && !busy {
+                    Button(VL.text("Установить GigaAM v3 и SpeakerKit")) {host.installRecognition()}.buttonStyle(QuietButton(primary:true)).disabled(!host.supported || host.removingSpeech)
+                    Text(VL.text("SpeakerKit нужен для разделения по голосам. WhisperKit для GigaAM скачивать не нужно.")).font(.system(size:12)).foregroundColor(Ink.secondary)
+                }
+            }
+        }.padding(20).background(Ink.surface).cornerRadius(9)
     }
     private var speechCard:some View {
         let models=host.registry.models.filter{LocalModelManager.speechIDs.contains($0.id)}
@@ -226,7 +254,7 @@ struct NativeAISettings: View {
         let status = host.statuses[model.id]
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 14) {
-                Image(systemName: ["whisper", "speaker", "tokenizer"].contains(model.id) ? "waveform" : "sparkles").font(.system(size: 19)).frame(width: 38, height: 38).background(Ink.elevated).cornerRadius(8)
+                Image(systemName: ["whisper", "speaker", "tokenizer", "gigaam"].contains(model.id) ? "waveform" : "sparkles").font(.system(size: 19)).frame(width: 38, height: 38).background(Ink.elevated).cornerRadius(8)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(AISummaryModelID(rawValue:model.id)?.title ?? VL.string(model.title)).font(.system(size: 15, weight: .medium))
                     if let llm=AISummaryModelID(rawValue:model.id) {

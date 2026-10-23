@@ -112,9 +112,9 @@ extension NativeAnalysisQueue.Job {
             let summaryNeeded = settings.conference?.summary ?? true
             let diarizationNeeded = settings.conference?.diarization ?? true
             let needed = (summaryNeeded ? [settings.model.rawValue] : []) +
-                (source == nil ? ["whisper", "tokenizer"] + (diarizationNeeded ? ["speaker"] : []) : [])
+                (source == nil ? host.speechEngine.modelIDs(diarization: diarizationNeeded) : [])
             guard host.supported, needed.allSatisfy({ host.statuses[$0]?.state == .installed }) else {
-                batchMessage = VL.text("Очередь сохранена. Для обработки установите WhisperKit и SpeakerKit и выбранную модель Qwen в разделе «Локальный ИИ».")
+                batchMessage = VL.text("Очередь сохранена. Для обработки установите выбранную модель распознавания, SpeakerKit и выбранную модель Qwen в разделе «Локальный ИИ».")
                 return
             }
             guard ownsQueue() else { return }

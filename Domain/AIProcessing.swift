@@ -51,6 +51,22 @@ enum AIProviderID: String, Codable, CaseIterable {
     var title: String { VL.text("Локально на Mac") }
 }
 
+/// Local speech-recognition engine. Speaker diarization (SpeakerKit) and every
+/// downstream stage are shared; only word recognition differs.
+enum AISpeechEngineID: String, Codable, CaseIterable, Identifiable {
+    case whisper, gigaam
+    var id: String { rawValue }
+    /// Model IDs required for recognition with this engine (diarization adds "speaker").
+    var recognitionModelIDs: [String] { self == .gigaam ? ["gigaam"] : ["whisper", "tokenizer"] }
+    func modelIDs(diarization: Bool = true) -> [String] { recognitionModelIDs + (diarization ? ["speaker"] : []) }
+    var title: String { self == .gigaam ? VL.text("GigaAM v3 · русская речь") : VL.text("Whisper · английская и другие языки") }
+    var description: String {
+        self == .gigaam
+            ? VL.text("Модель Сбера GigaAM v3 на MLX. Распознаёт только русский язык, расставляет пунктуацию и обычно точнее Whisper на русской речи.")
+            : VL.text("WhisperKit · Whisper large-v3 Turbo. Многоязычная модель, подходит для английской речи и смешанных записей.")
+    }
+}
+
 enum AISummaryModelID: String, Codable, CaseIterable {
     case qwen, qwen4b, qwen9b, qwen06b
     static var allCases: [Self] { [.qwen4b, .qwen9b] }
@@ -88,7 +104,8 @@ struct LocalAISettingsSnapshot: Codable, Equatable {
     let updatedAt: Date
     func validate() throws {
         let known=Set(["whisper", "speaker", "tokenizer", "qwen", "qwen4b"])
-        guard (models.count == 5 && Set(models.map(\.id)) == Set(["whisper", "speaker", "tokenizer", "qwen4b", "qwen9b"]) || models.count == 5 && Set(models.map(\.id)) == known || models.count == 6 && Set(models.map(\.id)) == known.union(["qwen9b"]) || models.count == 7 && Set(models.map(\.id)) == known.union(["qwen9b", "qwen06b"])),
+        let current=Set(["whisper", "speaker", "tokenizer", "qwen4b", "qwen9b"])
+        guard (models.count == 5 && Set(models.map(\.id)) == current || models.count == 6 && Set(models.map(\.id)) == current.union(["gigaam"]) || models.count == 5 && Set(models.map(\.id)) == known || models.count == 6 && Set(models.map(\.id)) == known.union(["qwen9b"]) || models.count == 7 && Set(models.map(\.id)) == known.union(["qwen9b", "qwen06b"])),
               models.allSatisfy({ $0.size > 0 && $0.size < 8_000_000_000 && $0.received >= 0 && $0.title.count < 200 && $0.variant.count < 200 })
         else { throw AIProcessingError.invalidRequest }
     }
@@ -105,7 +122,7 @@ struct LocalAISettingsCommand: Codable, Equatable {
         if action == .refresh {
             guard modelID == nil else { throw AIProcessingError.invalidRequest }
         } else {
-            guard let modelID, ["whisper", "speaker", "tokenizer", "qwen", "qwen4b", "qwen9b", "qwen06b"].contains(modelID),
+            guard let modelID, ["whisper", "speaker", "tokenizer", "gigaam", "qwen", "qwen4b", "qwen9b", "qwen06b"].contains(modelID),
                   action != .selectSummaryModel || AISummaryModelID(rawValue: modelID) != nil
             else { throw AIProcessingError.invalidRequest }
         }
@@ -286,17 +303,22 @@ struct AIProcessingRequest: Codable, Equatable {
     var visualSummaryModel:AISummaryModelID? = nil
     var outputLanguage:String? = nil
     var conference: AIConferenceProcessingOptions? = nil
+    /// Absent in requests created before engine selection: those use Whisper.
+    var speechEngine: AISpeechEngineID? = nil
+    var selectedSpeechEngine: AISpeechEngineID { speechEngine ?? .whisper }
+    /// GigaAM was trained on utterances up to ~25 s; Whisper keeps 60 s windows.
+    var speechWindowSeconds: (chunk: Double, overlap: Double) { selectedSpeechEngine == .gigaam ? (20, 2) : (60, 3) }
     var wantsDiarization: Bool { conference?.diarization ?? true }
     var wantsSummary: Bool { conference?.summary ?? true }
     var resultLanguage:VectaLanguage {outputLanguage.flatMap(VectaLanguage.init(rawValue:)) ?? .russian}
     var speechCheckpointVersion:Int {outputLanguage == nil ? 1:2}
-    var speechDecodingPolicy:String {outputLanguage == nil ? "forced-ru-v1":"automatic-v1"}
+    var speechDecodingPolicy:String {selectedSpeechEngine == .gigaam ? "gigaam-v3-e2e-rnnt-v1" : outputLanguage == nil ? "forced-ru-v1":"automatic-v1"}
     func acceptsSpeechCheckpoint(version:Int,outputLanguage:String?,decodingPolicy:String?)->Bool {
         version==speechCheckpointVersion && outputLanguage==self.outputLanguage &&
         (decodingPolicy ?? "forced-ru-v1")==speechDecodingPolicy
     }
     func speechCheckpointURL(for output:URL)->URL {
-        let name=outputLanguage == nil ? "speech-v1-"+audioSHA256 : "speech-v2-"+resultLanguage.rawValue+"-auto-"+audioSHA256
+        let name=selectedSpeechEngine == .gigaam ? "speech-gigaam-v3-"+resultLanguage.rawValue+"-"+audioSHA256 : outputLanguage == nil ? "speech-v1-"+audioSHA256 : "speech-v2-"+resultLanguage.rawValue+"-auto-"+audioSHA256
         return output.deletingLastPathComponent().appendingPathComponent(name+".json")
     }
     var selectedVisualModel:AISummaryModelID { visualSummaryModel ?? .qwen9b }
@@ -1543,7 +1565,7 @@ struct AIProgressPlan {
         weights=values;calibrated=known
     }
     static func model(_ stage:AIProcessingStage,result:AIProcessingResult)->String {
-        switch stage {case .loadingSummary,.summarizing:return result.request.selectedSummaryModel.rawValue;case .visualizing:return result.visualModel ?? result.request.selectedVisualModel.rawValue;case .diarizing:return "speaker";default:return "whisper"}
+        switch stage {case .loadingSummary,.summarizing:return result.request.selectedSummaryModel.rawValue;case .visualizing:return result.visualModel ?? result.request.selectedVisualModel.rawValue;case .diarizing:return "speaker";default:return result.request.selectedSpeechEngine == .gigaam ? "gigaam":"whisper"}
     }
     static func bucket(_ stage:AIProcessingStage,result:AIProcessingResult)->Int {
         let size:[Double]=[60,600,1800,3600,7200,14400,21600]
@@ -1554,6 +1576,8 @@ struct AIProgressPlan {
         let index=stages.firstIndex(of:result.stage)
         var units:Double?=nil
         if result.stage == .recognizing,let p=result.recognitionProgress,p.totalSeconds>0 {units=min(1,max(0,p.processedSeconds/p.totalSeconds))}
+        // GigaAM recognizes in the MLX worker, which reports finished windows as events.
+        if result.stage == .recognizing,event?.phase=="recognition",let total=event?.total,total>0,let completed=event?.completed {units=min(1,max(units ?? 0,Double(completed)/Double(total)))}
         if result.stage == .diarizing,event?.phase=="diarization",let total=event?.total,total>0,let completed=event?.completed {units=min(1,max(0,Double(completed)/Double(total)))}
         if result.stage == .summarizing,let p=result.summaryProgress {
             if let fraction=p.fraction {units=min(1,max(0,fraction))}
