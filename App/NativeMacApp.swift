@@ -226,6 +226,8 @@ import NotePinTransport
     private var wifiTransfer: NativeWiFiTransfer?
     private var wifiStartTask: Task<Void, Never>?
     private var wifiCleanupTask: Task<Void, Never>?
+    private var automaticFastTransferTimer: Timer?
+    private var automaticFastTransferAttempts: [NativeRecordingIdentity: [TimeInterval]] = [:]
     @Published var fastTransferPhase: String?
     @Published var showingFastTransferWarning = false
     private var fastTransferAvailability: NativeFastTransferAvailability {
@@ -947,6 +949,7 @@ import NotePinTransport
                 try wifiTransfer.download(file, to: root.appendingPathComponent("recording.plaudaudio"))
             } else {
                 driver?.download(recording: file, to: root.appendingPathComponent("recording.plaudaudio"))
+                scheduleAutomaticFastTransfer(for: item.identity)
             }
         } catch {
             if wifiTransfer != nil {
@@ -1144,6 +1147,23 @@ extension NativeMacModel {
         guard canStartFastTransfer else { return }
         if doNotShowAgain { VectaRuntimePreferences.synchronization.set(true, forKey: "Vecta.fastTransfer.skipNetworkWarning") }
         beginFastTransfer()
+    }
+    /// Bluetooth moves about an hour of audio in 11 minutes. A copy still running after a minute
+    /// switches to Fast transfer without a click (Vecta.fastTransfer.automatic, on by default).
+    /// A failed attempt reconnects and restarts the copy, so cap it at three per recording per hour.
+    private func scheduleAutomaticFastTransfer(for identity: NativeRecordingIdentity) {
+        automaticFastTransferTimer?.invalidate()
+        guard VectaRuntimePreferences.synchronization.object(forKey: "Vecta.fastTransfer.automatic") as? Bool ?? true else { return }
+        automaticFastTransferTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.transferID == identity, self.wifiTransfer == nil, self.canStartFastTransfer else { return }
+                let now = ProcessInfo.processInfo.systemUptime
+                let recent = (self.automaticFastTransferAttempts[identity] ?? []).filter { now - $0 < 3600 }
+                guard recent.count < 3 else { return }
+                self.automaticFastTransferAttempts[identity] = recent + [now]
+                self.beginFastTransfer()
+            }
+        }
     }
     private func beginFastTransfer() {
         #if VECTA_DEVELOPMENT

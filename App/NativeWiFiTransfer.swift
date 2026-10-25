@@ -97,10 +97,12 @@ import NotePinTransport
     }
     private func receive(_ bytes: Data) {
         guard phase != .closing, phase != .closed else { return }
+        var command = "undecoded"
         do {
             // Modern-device traffic must authenticate with this BLE-negotiated key.
             // No ciphertext heuristic or plaintext fallback is used.
             let envelope = try WiFiEnvelope.decode(driver.openWiFiPDU(bytes))
+            command = String(envelope.command.rawValue)
             if envelope.command == .power {
                 logger.notice("Recorder battery report ignored in phase \(String(describing: self.phase), privacy: .public)")
                 return
@@ -118,6 +120,13 @@ import NotePinTransport
                 logger.notice("Encrypted recorder hello verified; handshake started")
                 try send(WiFiHandshake(token: driver.wifiOwnerToken, stamp: UInt64(Date().timeIntervalSince1970)))
             case .handshake:
+                // A known non-handshake frame 1.5 s after the hello rejected a transfer
+                // (82 bytes, command not logged then); a repeated hello is the likely one.
+                if envelope.command == .sayHello {
+                    guard try envelope.metadata(as: WiFiSayHello.self).matches(serial: serial) else { throw Failure.invalidPeer }
+                    logger.notice("Repeated recorder hello ignored during handshake")
+                    return
+                }
                 let response = try envelope.metadata(as: WiFiHandshakeResponse.self)
                 guard response.accepted else { throw Failure.rejectedHandshake }
                 list = try WiFiFileListCollector(expectedUID: listRequestID)
@@ -182,7 +191,7 @@ import NotePinTransport
             else if error is CryptoKitError { category = "packet-authentication" }
             else if let failure = error as? Failure { category = "peer-state-" + String(describing: failure) }
             else { category = "other" }
-            logger.error("WiFi response rejected in phase \(String(describing: self.phase), privacy: .public): \(category, privacy: .public); bytes=\(bytes.count, privacy: .public)")
+            logger.error("WiFi response rejected in phase \(String(describing: self.phase), privacy: .public): \(category, privacy: .public); command=\(command, privacy: .public); bytes=\(bytes.count, privacy: .public)")
             fail(VL.text("PLAUD передал несовместимый или неполный Wi‑Fi-ответ. Незавершённая запись не опубликована; файлы на диктофоне не удалялись."))
         }
     }
