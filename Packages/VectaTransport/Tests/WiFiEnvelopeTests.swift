@@ -37,7 +37,7 @@ final class WiFiEnvelopeTests: XCTestCase {
     }
 
     func testCommandConstants() {
-        XCTAssertEqual(WiFiCommand.allCases.map(\.rawValue), [1, 2, 3, 11, 12, 13])
+        XCTAssertEqual(WiFiCommand.allCases.map(\.rawValue), [1, 2, 3, 4, 11, 12, 13])
     }
 
     func testExactJSONLimitAndNoSignedWrapping() throws {
