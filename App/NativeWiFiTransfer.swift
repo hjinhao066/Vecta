@@ -26,6 +26,7 @@ import NotePinTransport
     private var cleanupTask: Task<String?, Never>?
     private var joinCleanupMessage: String?
     private var lastProgress: TimeInterval = 0
+    private var delivered = false
     var onReady: (() -> Void)?
     var onProgress: ((Int, Int) -> Void)?
     var onFileReceived: ((URL) -> Void)?
@@ -171,6 +172,7 @@ import NotePinTransport
                         self.rawURL = nil; transfer = nil; phase = .ready; deadline?.invalidate()
                         logger.notice("WiFi recording received and byte count verified")
                         onProgress?(Int(state.receivedByteCount), Int(state.expectedSize))
+                        delivered = true
                         onFileReceived?(rawURL)
                     } else {
                         if ProcessInfo.processInfo.systemUptime - lastProgress >= 0.2 {
@@ -213,7 +215,16 @@ import NotePinTransport
     }
     private func fail(_ message: String) {
         guard phase != .closing, phase != .closed else { return }
-        logger.error("WiFi transfer stopped in phase \(String(describing: self.phase), privacy: .public)")
+        // NotePin S ends the Wi-Fi session about 17 s after the last file, right after its battery
+        // report, while the driver is still converting that file (16 complete files were thrown away
+        // this way on 2026-10-25). The delivered file is complete; let it publish, and leave network
+        // restoration to the normal end of sync.
+        if phase == .ready, delivered {
+            logger.notice("Recorder ended Wi-Fi after delivering a recording; conversion continues: \(message, privacy: .public)")
+            phase = .closing; deadline?.invalidate(); socket?.stop()
+            return
+        }
+        logger.error("WiFi transfer stopped in phase \(String(describing: self.phase), privacy: .public): \(message, privacy: .public)")
         phase = .closing; deadline?.invalidate(); socket?.stop()
         try? sink?.close(); sink = nil; transfer = nil
         onFailure?(message)
