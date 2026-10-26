@@ -126,21 +126,47 @@ struct NativeMacView: View {
             Spacer()
                 Button { model.destination = .device } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: "externaldrive.fill").font(.system(size: 23)).foregroundColor(Ink.secondary)
+                        VStack(spacing: 3) {
+                            Image(systemName: "externaldrive.fill").font(.system(size: 23)).foregroundColor(Ink.secondary)
+                            if compactSidebar, let battery = sidebarBattery { Text("\(battery)%").font(.system(size: 9, weight: .semibold)).monospacedDigit().foregroundColor(batteryColor(battery)) }
+                        }
                         if !compactSidebar { VStack(alignment: .leading, spacing: 5) {
                             Text(model.savedDevice?.model.displayName ?? VL.text("Plaud не выбран")).font(.system(size: 12, weight: .medium)).lineLimit(1)
                             HStack(spacing: 4) {
                                 Circle().fill(model.connected ? Ink.success : Ink.muted).frame(width: 5, height: 5)
-                                Text(model.connected ? VL.text("Подключён") : (model.savedDevice == nil ? VL.text("Устройство не выбрано") : VL.text("Готов к синхронизации")))
+                                Text(model.connected ? VL.text("Подключён") : (model.savedDevice == nil ? VL.text("Устройство не выбрано") : VL.text("Готов к синхронизации"))).lineLimit(1)
+                                if let battery = sidebarBattery {
+                                    Spacer(minLength: 4)
+                                    HStack(spacing: 3) {
+                                        Image(systemName: batterySymbol(battery)).font(.system(size: 11))
+                                        Text("\(battery)%").font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                                    }.foregroundColor(batteryColor(battery)).fixedSize().layoutPriority(1)
+                                }
                             }.font(.system(size: 10)).foregroundColor(Ink.secondary)
                         } }
                     }.padding(10).frame(maxWidth: .infinity, alignment: .leading).background(model.destination == .device ? Ink.selection : Ink.surface).cornerRadius(8)
-                }.buttonStyle(.plain).help(VL.text("Открыть Plaud"))
+                }.buttonStyle(.plain).help(deviceCardHelp)
                     .accessibilityLabel(model.savedDevice?.model.displayName ?? VL.text("Подключить Plaud"))
-                    .accessibilityValue(model.connected ? VL.text("Подключён") : VL.text("Не подключён"))
+                    .accessibilityValue(deviceCardValue)
 
         }.padding(.horizontal, compactSidebar ? 10 : 14).padding(.vertical, 16).background(Ink.sidebar)
     }
+    /// Glanceable battery for the sidebar card; the last reported level stays (dimmed) between syncs.
+    private var sidebarBattery: Int? { model.savedDevice == nil ? nil : model.battery }
+    private var batteryLabel: String { model.connected ? VL.text("Заряд") : VL.text("Последний известный заряд") }
+    private var deviceCardHelp: String {
+        guard let battery = sidebarBattery else { return VL.text("Открыть Plaud") }
+        return batteryLabel + " \(battery)%"
+    }
+    private var deviceCardValue: String {
+        let state = model.connected ? VL.text("Подключён") : VL.text("Не подключён")
+        guard let battery = sidebarBattery else { return state }
+        return state + ", " + batteryLabel + " \(battery)%"
+    }
+    private func batterySymbol(_ level: Int) -> String {
+        level >= 88 ? "battery.100percent" : level >= 63 ? "battery.75percent" : level >= 38 ? "battery.50percent" : level >= 13 ? "battery.25percent" : "battery.0percent"
+    }
+    private func batteryColor(_ level: Int) -> Color { level <= 15 ? Ink.error : model.connected ? Ink.text : Ink.muted }
     private var sidebarToggle: some View {
         Button { compactSidebar.toggle() } label: {
             Label(compactSidebar ? VL.text("Показать боковую панель") : VL.text("Скрыть боковую панель"), systemImage: "sidebar.left").labelStyle(.iconOnly)

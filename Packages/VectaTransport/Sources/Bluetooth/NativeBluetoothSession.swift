@@ -85,6 +85,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
     private var writes: [Data] = []
     private var writeInProgress = false
     private var deadline: Timer?
+    private var lastDownloadActivity: TimeInterval = 0
     private var stopped = false
     private var maintainsConnection=false
     func setMaintainsConnection(_ value:Bool) {maintainsConnection=value;if value {idleDeadline?.invalidate();idleDeadline=nil}}
@@ -165,7 +166,8 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
         stage = value; onStatus?(message)
         events.append(["stage": value.rawValue, "time": Date().timeIntervalSince1970])
         deadline?.invalidate()
-        if value != .complete && value != .downloaded && value != .decoded && value != .wifiReady && value != .wifiDownload && value != .failed {
+        // Decoding sets its own size-based deadline in decodeDownloadedAudio.
+        if value != .complete && value != .downloaded && value != .decoding && value != .decoded && value != .wifiReady && value != .wifiDownload && value != .failed {
             deadline = Timer.scheduledTimer(withTimeInterval: value == .preparing ? 75 : value == .list ? max(0.1,min(12,45-Date().timeIntervalSince(listStartedAt))) : 45, repeats: false) { [weak self] _ in
                 guard let self, !self.stopped else { return }
                 if self.stage == .list { self.retryFileList() }
@@ -575,10 +577,13 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
                     downloadCollector = nil
                     transition(.downloaded, "Файл передан и проверен: \(rawURL.lastPathComponent)")
                     decodeDownloadedAudio(rawURL)
-                } else if case .data = packet,ProcessInfo.processInfo.systemUptime-lastTransferPublication>=0.2 {
-                    lastTransferPublication=ProcessInfo.processInfo.systemUptime
-                    onTransferProgress?(Int(collector.receivedByteCount), Int(collector.expectedByteSize))
-                    onStatus?("Передаём запись: \(collector.receivedByteCount) / \(collector.expectedByteSize) байт")
+                } else if case .data = packet {
+                    lastDownloadActivity=ProcessInfo.processInfo.systemUptime
+                    if lastDownloadActivity-lastTransferPublication>=0.2 {
+                        lastTransferPublication=lastDownloadActivity
+                        onTransferProgress?(Int(collector.receivedByteCount), Int(collector.expectedByteSize))
+                        onStatus?("Передаём запись: \(collector.receivedByteCount) / \(collector.expectedByteSize) байт")
+                    }
                 }
             }
         } catch {
@@ -600,9 +605,13 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
                                                            expectedByteSize: recording.byteSize,
                                                            stagingURL: stagingURL, crcInitial: 0xffff, authenticatedPackets: crypto != nil)
             transition(.download, "Передаём запись (\(recording.byteSize) байт)…")
+            // Bluetooth moves ~19 KB/s, so a fixed 300 s limit restarted every recording over ~5 MB
+            // from zero forever. Fail only when the recorder stops sending data for a minute.
             deadline?.invalidate()
-            deadline = Timer.scheduledTimer(withTimeInterval: 300, repeats: false) { [weak self] _ in
-                guard let self else { return }; self.fail("timeout-download")
+            lastDownloadActivity = ProcessInfo.processInfo.systemUptime
+            deadline = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+                guard let self, self.stage == .download else { return }
+                if ProcessInfo.processInfo.systemUptime - self.lastDownloadActivity > 60 { self.fail("timeout-download") }
             }
             try send(AudioDownloadPacket.fullRequest(session: recording.sessionID, end: recording.byteSize))
         } catch { fail("download-start-failed") }
@@ -685,6 +694,14 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
     private func decodeDownloadedAudio(_ rawURL: URL) {
 
         transition(.decoding, "Готовим MP3…")
+        // The generic 45 s stage limit discarded every recording longer than about an hour after a
+        // verified Wi-Fi delivery. Allow 60 s plus 1 s per 100 KB (a 35 MB / 2.4 h file gets ~7 min).
+        let rawBytes = (try? rawURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        deadline?.invalidate()
+        deadline = Timer.scheduledTimer(withTimeInterval: 60 + Double(rawBytes) / 100_000, repeats: false) { [weak self] _ in
+            guard let self, !self.stopped, self.stage == .decoding else { return }
+            self.fail("timeout-decoding")
+        }
         let privateKey = identity?.privateKey
         let defaultChannels = audioChannels
         let readsHighlights = config.deviceType == "notepins" && protocolVersion == 20
