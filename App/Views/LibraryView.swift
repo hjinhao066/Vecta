@@ -135,14 +135,14 @@ struct NativeMacView: View {
                             HStack(spacing: 4) {
                                 Circle().fill(model.connected ? Ink.success : Ink.muted).frame(width: 5, height: 5)
                                 Text(model.connected ? VL.text("Подключён") : (model.savedDevice == nil ? VL.text("Устройство не выбрано") : VL.text("Готов к синхронизации"))).lineLimit(1)
-                                if let battery = sidebarBattery {
-                                    Spacer(minLength: 4)
-                                    HStack(spacing: 3) {
-                                        Image(systemName: batterySymbol(battery)).font(.system(size: 11))
-                                        Text("\(battery)%").font(.system(size: 11, weight: .semibold)).monospacedDigit()
-                                    }.foregroundColor(batteryColor(battery)).fixedSize().layoutPriority(1)
-                                }
                             }.font(.system(size: 10)).foregroundColor(Ink.secondary)
+                            // Own row: the sidebar is too narrow to share one with the status text.
+                            if let battery = sidebarBattery {
+                                HStack(spacing: 4) {
+                                    Image(systemName: batterySymbol(battery)).font(.system(size: 12))
+                                    Text("\(battery)%").font(.system(size: 12, weight: .semibold)).monospacedDigit()
+                                }.foregroundColor(batteryColor(battery))
+                            }
                         } }
                     }.padding(10).frame(maxWidth: .infinity, alignment: .leading).background(model.destination == .device ? Ink.selection : Ink.surface).cornerRadius(8)
                 }.buttonStyle(.plain).help(deviceCardHelp)
