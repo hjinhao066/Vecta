@@ -69,7 +69,8 @@ struct WiFiNetworkChecks {
         wifiCheck(decision(current: .associated(identity("synthetic-recorder", recorder.bssid, interface: "en8"))) == .preserveCurrentNetwork)
         wifiCheck(decision(current: .unknown) == .metadataUnavailable)
         wifiCheck(decision(current: .unavailable) == .interfaceUnavailable)
-        wifiCheck(decision(current: .disconnected) == .notConnected)
+        wifiCheck(decision(current: .disconnected) == .restorePreviousNetwork)
+        wifiCheck(decision(previous: .disconnected, current: .disconnected) == .notConnected)
         wifiCheck(identity("synthetic-home", "AB:CD:EF:00:00:01") == identity("synthetic-home", "ab:cd:ef:00:00:01"))
         wifiCheck(identity("\u{00e9}", home.bssid) != identity("e\u{0301}", home.bssid))
         wifiCheck(NativeWiFiIdentity(interfaceName: "en9", ssid: nil, bssid: home.bssid) == nil)
@@ -253,7 +254,7 @@ struct WiFiNetworkChecks {
         wifiCheck(await duringAssociateWorker.restore(duringAssociateLease, owner: owner) == .unchanged(.currentNetworkChanged))
         wifiCheck(duringAssociate.disconnects == 0)
 
-        for current in [NativeWiFiLink.unknown, .unavailable, .disconnected,
+        for current in [NativeWiFiLink.unknown, .unavailable,
                         .associated(identity("synthetic-recorder", "02:00:00:00:00:04"))] {
             let (hardware, worker) = fixture()
             let lease = try await join(worker)
@@ -262,11 +263,24 @@ struct WiFiNetworkChecks {
             switch current {
             case .unknown: wifiCheck(outcome == .manualRecoveryRequired(.metadataUnavailable))
             case .unavailable: wifiCheck(outcome == .manualRecoveryRequired(.interfaceUnavailable))
-            case .disconnected: wifiCheck(outcome == .manualRecoveryRequired(.notConnected))
             default: wifiCheck(outcome == .unchanged(.currentNetworkChanged))
             }
             wifiCheck(hardware.scans.count == 1 && hardware.disconnects == 0)
         }
+
+        // The recorder ended its access point after delivering a file: rejoin the previous network.
+        let (ended, endedWorker) = fixture()
+        let endedLease = try await join(endedWorker)
+        ended.link = .disconnected
+        wifiCheck(await endedWorker.restore(endedLease, owner: owner) == .restoredPreviousNetwork)
+        wifiCheck(ended.scans == [recorder.ssid, home.ssid] && ended.associations == [true, false] && ended.disconnects == 0)
+
+        let (endedFailed, endedFailedWorker) = fixture()
+        let endedFailedLease = try await join(endedFailedWorker)
+        endedFailed.link = .disconnected
+        endedFailed.onAssociate = { _, hasPassword in if !hasPassword { throw SyntheticFault.failed } }
+        wifiCheck(await endedFailedWorker.restore(endedFailedLease, owner: owner) == .manualRecoveryRequired(.notConnected))
+        wifiCheck(endedFailed.associations == [true, false] && endedFailed.disconnects == 0)
 
         let (stuck, stuckWorker) = fixture(previous: .disconnected)
         let stuckLease = try await join(stuckWorker)

@@ -955,7 +955,7 @@ import NotePinTransport
                 try wifiTransfer.download(file, to: root.appendingPathComponent("recording.plaudaudio"))
             } else {
                 driver?.download(recording: file, to: root.appendingPathComponent("recording.plaudaudio"))
-                scheduleAutomaticFastTransfer(for: item.identity)
+                scheduleAutomaticFastTransfer(for: item.identity, byteSize: Int(file.byteSize))
             }
         } catch {
             if wifiTransfer != nil {
@@ -1154,15 +1154,18 @@ extension NativeMacModel {
         if doNotShowAgain { VectaRuntimePreferences.synchronization.set(true, forKey: "Vecta.fastTransfer.skipNetworkWarning") }
         beginFastTransfer()
     }
-    /// Bluetooth moves about an hour of audio in 11 minutes. A copy still running after a minute
-    /// switches to Fast transfer without a click (Vecta.fastTransfer.automatic, on by default).
+    /// Bluetooth moves about an hour of audio in 11 minutes, so a file over 1.5 MB (about six minutes
+    /// of audio) cannot finish in a minute: it switches to Fast transfer after 5 seconds, a smaller one
+    /// after a minute, without a click (Vecta.fastTransfer.automatic, on by default).
     /// A failed attempt reconnects and restarts the copy, so cap it at three per recording per hour.
-    private func scheduleAutomaticFastTransfer(for identity: NativeRecordingIdentity) {
+    private func scheduleAutomaticFastTransfer(for identity: NativeRecordingIdentity, byteSize: Int, after delay: TimeInterval? = nil) {
         automaticFastTransferTimer?.invalidate()
         guard VectaRuntimePreferences.synchronization.object(forKey: "Vecta.fastTransfer.automatic") as? Bool ?? true else { return }
-        automaticFastTransferTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: false) { [weak self] _ in
+        automaticFastTransferTimer = Timer.scheduledTimer(withTimeInterval: delay ?? (byteSize > 1_500_000 ? 5 : 60), repeats: false) { [weak self] _ in
             Task { @MainActor in
-                guard let self, self.transferID == identity, self.wifiTransfer == nil, self.canStartFastTransfer else { return }
+                guard let self, self.transferID == identity, self.wifiTransfer == nil, self.showsFastTransfer else { return }
+                // The download command may still be in flight this early; look again shortly.
+                guard self.canStartFastTransfer else { self.scheduleAutomaticFastTransfer(for: identity, byteSize: byteSize, after: 5); return }
                 let now = ProcessInfo.processInfo.systemUptime
                 let recent = (self.automaticFastTransferAttempts[identity] ?? []).filter { now - $0 < 3600 }
                 guard recent.count < 3 else { return }

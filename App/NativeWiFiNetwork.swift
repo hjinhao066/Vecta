@@ -290,7 +290,11 @@ func nativeWiFiRestorationDecision(activeGeneration: UInt64?, leaseGeneration: U
     switch current {
     case .unavailable: return .interfaceUnavailable
     case .unknown: return .metadataUnavailable
-    case .disconnected: return .notConnected
+    case .disconnected:
+        // The recorder switches its access point off once it has delivered a file, leaving the Mac
+        // on no network at all; nobody else chose that, so rejoining the previous network is still ours.
+        if case .associated = previous { return .restorePreviousNetwork }
+        return .notConnected
     case .associated(let identity):
         guard identity == recorder else { return .preserveCurrentNetwork }
         if case .associated = previous { return .restorePreviousNetwork }
@@ -659,6 +663,7 @@ final class NativeWiFiWorker: @unchecked Sendable {
         }
         // Re-evaluate after both scan and association, even when either failed or finished late.
         if let outcome = outcome(for: decision(for: lease)) { return outcome }
+        if hardware.current(on: lease.interfaceName) == .disconnected { return .manualRecoveryRequired(.notConnected) }
         // The pure predicate authorizes this ONLY for our exact recorder association. Re-read
         // immediately before disassociation; CoreWLAN has no atomic compare-and-disassociate API.
         guard hardware.current(on: lease.interfaceName) == .associated(lease.recorder),
