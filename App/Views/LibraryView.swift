@@ -141,6 +141,7 @@ struct NativeMacView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: batterySymbol(battery)).font(.system(size: 12))
                                     Text("\(battery)%").font(.system(size: 12, weight: .semibold)).monospacedDigit()
+                                    if let read = batteryReadShort { Text("· "+read).font(.system(size: 10)).foregroundColor(Ink.muted).lineLimit(1) }
                                 }.foregroundColor(batteryColor(battery))
                             }
                         } }
@@ -154,14 +155,19 @@ struct NativeMacView: View {
     /// Glanceable battery for the sidebar card; the last reported level stays (dimmed) between syncs.
     private var sidebarBattery: Int? { model.savedDevice == nil ? nil : model.battery }
     private var batteryLabel: String { model.connected ? VL.text("Заряд") : VL.text("Последний известный заряд") }
+    /// Reading time for the card: clock time today, the day otherwise; the full stamp is in the tooltip.
+    private var batteryReadShort: String? {
+        model.batteryReadAt.map { Calendar.current.isDateInToday($0) ? $0.vectaFormatted(date: .omitted, time: .shortened) : $0.formatted(.dateTime.month(.abbreviated).day().locale(VL.locale)) }
+    }
+    private var batteryReadFull: String { model.batteryReadAt.map { " · "+$0.vectaFormatted(date: .abbreviated, time: .shortened) } ?? "" }
     private var deviceCardHelp: String {
         guard let battery = sidebarBattery else { return VL.text("Открыть Plaud") }
-        return batteryLabel + " \(battery)%"
+        return batteryLabel + " \(battery)%" + batteryReadFull
     }
     private var deviceCardValue: String {
         let state = model.connected ? VL.text("Подключён") : VL.text("Не подключён")
         guard let battery = sidebarBattery else { return state }
-        return state + ", " + batteryLabel + " \(battery)%"
+        return state + ", " + batteryLabel + " \(battery)%" + batteryReadFull
     }
     private func batterySymbol(_ level: Int) -> String {
         level >= 88 ? "battery.100percent" : level >= 63 ? "battery.75percent" : level >= 38 ? "battery.50percent" : level >= 13 ? "battery.25percent" : "battery.0percent"

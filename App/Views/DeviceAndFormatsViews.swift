@@ -25,7 +25,7 @@ struct NativeDeviceScreen: View {
                     Button(VL.text("Настройка авторизации…"), action: model.beginDeviceSetup).disabled(model.busy)
                 }.padding(20).background(Ink.surface).cornerRadius(9)
                 VStack(spacing: 18) {
-                    if let battery = model.battery { line(model.connected ? VL.text("Заряд") : VL.text("Последний известный заряд"), "\(battery)%") }
+                    if let battery = model.battery { line(model.connected ? VL.text("Заряд") : VL.text("Последний известный заряд"), "\(battery)%" + (model.batteryReadAt.map { " · "+$0.vectaFormatted(date: .abbreviated, time: .shortened) } ?? "")) }
                     if let date = model.savedDevice?.lastSynchronized { line(VL.text("Последняя синхронизация"), date.vectaFormatted(date: .abbreviated, time: .shortened)) }
                     line(VL.text("Записей на Mac"), "\(model.library?.localItemCount ?? 0)")
                 }.padding(20).background(Ink.surface).cornerRadius(9)

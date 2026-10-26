@@ -62,7 +62,9 @@ import NotePinTransport
     @Published var showingDeviceSetup = false
     @Published var offlineAuthorizationReady = false
     private var setupCredentials: VectaPartnerCredentials?
-    @Published var battery: Int?
+    @Published var battery: Int? = UserDefaults.standard.object(forKey: "Vecta.lastBattery") as? Int
+    /// When the recorder last reported `battery`. Kept across launches with the level, so an old reading always shows its age.
+    @Published var batteryReadAt: Date? = UserDefaults.standard.object(forKey: "Vecta.lastBatteryAt") as? Date
     @Published var pickerStatus = ""
     @Published var scanning = false
     @Published var destination: NativeDestination = .library
@@ -293,7 +295,7 @@ import NotePinTransport
                     // must never permit a later automatic connection or reset retry.
                     try PlaudSelectionStore(url: self.services.appendingPathComponent("selected-device.json")).forget()
                     self.savedDevice = nil; self.pendingDevice = nil; self.serial = nil; self.offlineAuthorizationReady = false
-                    self.setupCredentials = nil; self.deviceSession = nil; self.battery = nil
+                    self.setupCredentials = nil; self.deviceSession = nil; self.recordBattery(nil)
                     try VectaOfflineIdentityStore.retireAfterReset(serial: confirmedSerial)
                     self.resetCommandRequested = true
                     try session.requestFactoryReset(confirmedSerial: confirmedSerial)
@@ -680,6 +682,10 @@ import NotePinTransport
         syncing = true; connect(candidate: candidate)
     }
 
+    private func recordBattery(_ level: Int?) {
+        battery = level; batteryReadAt = level == nil ? nil : Date()
+        UserDefaults.standard.set(level, forKey: "Vecta.lastBattery"); UserDefaults.standard.set(batteryReadAt, forKey: "Vecta.lastBatteryAt")
+    }
     private func connect(candidate: PlaudCandidate? = nil, session: VectaDeviceSession? = nil) {
         guard let serial,
               let saved = pendingDevice ?? savedDevice, saved.serialNumber == serial else {
@@ -750,7 +756,7 @@ import NotePinTransport
         }
         next.setMaintainsConnection(autoSyncInterval.keepsConnection)
         next.onStatus = { [weak self] value in guard self?.connectionAttempt == driverAttempt else { return }; if self?.status != value { self?.status = value } }
-        next.onBattery = { [weak self] level, _ in self?.battery = level }
+        next.onBattery = { [weak self] level, _ in self?.recordBattery(level) }
         next.onComplete = { [weak self, weak next] entries in
             guard let self, self.connectionAttempt == driverAttempt else { return }
             files = entries; connected = true; connecting = false
