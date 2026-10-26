@@ -30,10 +30,14 @@ struct NativeDailyReflectionScreen: View {
             else if store.loaded && store.days.isEmpty { message(VL.text("В папке пока нет записей. Они появятся здесь сами, как только AI допишет отчёт за день."), action: nil) }
             else if !store.loaded { HStack(spacing: 8) { ProgressView().controlSize(.small); Text(VL.text("Читаем рефлексии…")).foregroundColor(Ink.secondary) }.padding(.horizontal, 28) }
             else {
-                HStack(spacing: 0) {
-                    dayList.frame(width: 252)
-                    Rectangle().fill(Ink.border).frame(width: 1)
-                    if let day = selected { reader(day) } else { Spacer() }
+                // Narrow windows give the list less room and the text tighter margins.
+                GeometryReader { geometry in
+                    let compact = geometry.size.width < 760
+                    HStack(spacing: 0) {
+                        dayList.frame(width: compact ? 200 : 252)
+                        Rectangle().fill(Ink.border).frame(width: 1)
+                        if let day = selected { reader(day, compact: compact) } else { Spacer() }
+                    }
                 }.overlay(alignment: .top) { Rectangle().fill(Ink.border).frame(height: 1) }
             }
         }
@@ -105,14 +109,14 @@ struct NativeDailyReflectionScreen: View {
             .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
-    private func reader(_ day: DailyReflectionDay) -> some View {
+    private func reader(_ day: DailyReflectionDay, compact: Bool) -> some View {
         ScrollViewReader { proxy in ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Text(day.date.formatted(.dateTime.weekday(.wide).month(.wide).day().year().locale(VL.locale)))
-                    .font(.system(size: 22, weight: .semibold)).foregroundColor(Ink.text).textSelection(.enabled)
+                    .font(.system(size: compact ? 19 : 22, weight: .semibold)).foregroundColor(Ink.text).textSelection(.enabled)
                     .padding(.bottom, 6)
                 ReflectionMarkdownView(blocks: day.blocks, base: day.file.deletingLastPathComponent())
-            }.frame(maxWidth: 960, alignment: .leading).padding(.horizontal, 36).padding(.top, 22).padding(.bottom, 48)
+            }.frame(maxWidth: 960, alignment: .leading).padding(.horizontal, compact ? 20 : 36).padding(.top, 22).padding(.bottom, 48)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }.onAppear {
             let target = Self.verificationArgument("--verify-reflection-block")
@@ -219,9 +223,18 @@ struct ReflectionMarkdownView: View {
         }.padding(.leading, CGFloat(item.level) * 20)
     }
 
+    /// Fits the width when the columns can keep whole words; otherwise scrolls sideways in its own frame.
     private func table(_ header: [String], _ rows: [[String]]) -> some View {
         let columns = ReflectionTableColumns.columns(header: header, rows: rows)
-        return VStack(spacing: 0) {
+        let minimum = columns.minimums.reduce(0, +)
+        return ViewThatFits(in: .horizontal) {
+            tableBody(header, rows, columns)
+            ScrollView(.horizontal) { tableBody(header, rows, columns).frame(width: minimum) }
+        }
+    }
+
+    private func tableBody(_ header: [String], _ rows: [[String]], _ columns: (weights: [CGFloat], minimums: [CGFloat])) -> some View {
+        VStack(spacing: 0) {
             ReflectionTableColumns(columns: columns) {
                 ForEach(Array(header.enumerated()), id: \.offset) { _, cell in
                     text(cell).font(.system(size: 13, weight: .semibold)).foregroundColor(Ink.tableHead)

@@ -21,7 +21,8 @@ enum DailyReflectionSource {
     static func folder(preferences: UserDefaults = VL.preferences) -> URL? {
         #if VECTA_DEVELOPMENT
         if let index = CommandLine.arguments.firstIndex(of: "--verify-reflection-folder"), CommandLine.arguments.indices.contains(index + 1) {
-            return URL(fileURLWithPath: CommandLine.arguments[index + 1], isDirectory: true)
+            // "none" shows the state where no review folder exists on this Mac.
+            return CommandLine.arguments[index + 1] == "none" ? nil : URL(fileURLWithPath: CommandLine.arguments[index + 1], isDirectory: true)
         }
         #endif
         if let path = preferences.string(forKey: folderKey), !path.isEmpty { return URL(fileURLWithPath: path, isDirectory: true) }
@@ -380,7 +381,8 @@ struct ReflectionTableColumns: Layout {
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let total = proposal.width ?? 640
+        // No width offered (ideal size): the narrowest width that keeps every word whole.
+        let total = proposal.width ?? minimums.reduce(0, +)
         let columns = widths(total, count: subviews.count)
         let height = zip(subviews, columns).map { $0.sizeThatFits(ProposedViewSize(width: $1, height: nil)).height }.max() ?? 0
         return CGSize(width: total, height: height)

@@ -12,13 +12,18 @@ struct NativeGeneralSettings: View {
         })
     }
     var body: some View {
-        ScrollView {
+        ScrollViewReader { proxy in ScrollView {
             VStack(alignment: .leading, spacing: 26) {
                 ScreenTitle(title: VL.text("Настройки"), subtitle: VL.text("Библиотека, устройство и локальный ИИ."))
                 NativeApplicationBehaviorSettings(settings: model.applicationSettings)
                 NativeLanguagePicker(model:model).padding(20).background(Ink.surface).cornerRadius(9)
                 HStack {Text(VL.text("Оформление"));Spacer();Picker(VL.text("Тема"),selection:$appearance) {ForEach(VectaAppearance.allCases) {Text($0.title).tag($0.rawValue)}}.frame(width:200)}.padding(20).background(Ink.surface).cornerRadius(9)
-                NativeColorThemePicker().padding(20).background(Ink.surface).cornerRadius(9)
+                NativeColorThemePicker().padding(20).background(Ink.surface).cornerRadius(9).id("colorTheme")
+                    .onAppear {
+                        #if VECTA_DEVELOPMENT
+                        if CommandLine.arguments.contains("--verify-scroll-themes") { DispatchQueue.main.async { proxy.scrollTo("colorTheme", anchor: .top) } }
+                        #endif
+                    }
                 VStack(alignment: .leading, spacing: 16) {
                     Text(VL.text("Библиотека")).font(.system(size: 18, weight: .semibold))
                     HStack { Text(VL.text("Папка обработки")).foregroundColor(Ink.secondary); Spacer(); Text(VectaLegacyPaths.presentationFolder(model.library?.exporter.folderName)) }
@@ -72,7 +77,7 @@ struct NativeGeneralSettings: View {
                     }
                 }.padding(20).background(Ink.surface).cornerRadius(9)
             }.frame(maxWidth: 760, alignment: .leading).padding(32).frame(maxWidth: .infinity, alignment: .topLeading)
-        }.onAppear { model.loadWorkspace() }
+        } }.onAppear { model.loadWorkspace() }
         .onChange(of: model.processingRoot ?? model.localAI?.root) { _ in model.loadWorkspace() }
         .alert(VL.text("Постоянное подключение к Plaud"),isPresented:$continuousWarning) {
             Button(VL.text("Включить постоянно")) {model.setAutoSyncInterval(.continuous)}
