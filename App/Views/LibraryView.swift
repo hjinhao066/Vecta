@@ -7,6 +7,7 @@ struct NativeMacView: View {
     @AppStorage("vecta.sidebarCollapsed") private var compactSidebar = false
     @AppStorage("vecta.librarySort") private var oldestFirst = false
     @AppStorage("vecta.appearance") private var appearance="dark"
+    @AppStorage(VectaColorTheme.preferenceKey) private var colorTheme="classic"
     @FocusState private var searchFocused:Bool
     @State private var hovered: NativeRecordingIdentity?
     @State private var deletingRecording: NativeLibraryItem?
@@ -20,6 +21,7 @@ struct NativeMacView: View {
                 case .library:
                     if detail, model.selection != nil { NativeRecordingDetail(model: model, back: { detail = false }) }
                     else { library }
+                case .reflection: NativeDailyReflectionScreen()
                 case .conferences: NativeConferencesScreen(model: model)
                 case .device: NativeDeviceScreen(model: model)
                 case .ai:
@@ -58,7 +60,8 @@ struct NativeMacView: View {
                     }
                 }.font(.system(size: 11)).foregroundColor(Ink.muted).padding(.horizontal, 28).padding(.vertical, 12)
             }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Ink.canvas)
-        }.foregroundColor(Ink.text).font(.system(size: 14)).preferredColorScheme((VectaAppearance(rawValue:appearance) ?? .dark).scheme).tint(Ink.text)
+        }.id(colorTheme) // a new theme rebuilds the views so every colour is read again
+        .foregroundColor(Ink.text).font(.system(size: 14)).preferredColorScheme((VectaAppearance(rawValue:appearance) ?? .dark).scheme).tint(Ink.accent)
             .overlay(alignment: .bottom) {
                 if let feedback = model.voiceFeedback {
                     Label(feedback, systemImage: "checkmark.circle.fill")
@@ -117,6 +120,7 @@ struct NativeMacView: View {
                 }
             }.padding(.horizontal, 8).padding(.top, 8)
             VStack(spacing: 5) {
+                nav(.reflection, VL.text("Ежедневная рефлексия"), "text.book.closed")
                 nav(.library, VL.text("Все записи"), "waveform", count: model.library?.items.count)
                 nav(.conferences, VL.text("Конференции"), "person.2.wave.2")
                 nav(.formats, VL.text("Форматы"), "text.badge.plus")
@@ -185,7 +189,7 @@ struct NativeMacView: View {
             if destination == .library { detail = false }
         } label: {
             HStack(spacing: 10) {
-                Image(systemName: icon).frame(width: 18)
+                Image(systemName: icon).frame(width: 18).foregroundColor(model.destination == destination ? Ink.accent : Ink.text)
                 if !compactSidebar {
                     Text(title); Spacer(minLength: 0)
                     if let count { Text("\(count)").font(.system(size: 11)).foregroundColor(Ink.muted) }
@@ -216,7 +220,7 @@ struct NativeMacView: View {
                 if !model.search.isEmpty || model.hasLibraryQuestion {
                     Button(action:model.clearLibraryQuestion) {Image(systemName:"xmark.circle.fill").foregroundColor(Ink.muted)}.buttonStyle(.plain).help(VL.text("Очистить вопрос и ответ")).accessibilityLabel(VL.text("Очистить вопрос и ответ"))
                 }
-                Button(action:model.askLibraryQuestion) {Image(systemName:"arrow.up").font(.system(size:12,weight:.semibold)).frame(width:28,height:28).background(Ink.text).foregroundColor(Ink.canvas).cornerRadius(7)}.buttonStyle(.plain).disabled(model.search.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || model.search.count>2000).help(VL.text("Спросить Vecta AI")).accessibilityLabel(VL.text("Спросить Vecta AI"))
+                Button(action:model.askLibraryQuestion) {Image(systemName:"arrow.up").font(.system(size:12,weight:.semibold)).frame(width:28,height:28).background(Ink.accent).foregroundColor(Ink.onAccent).cornerRadius(7)}.buttonStyle(.plain).disabled(model.search.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || model.search.count>2000).help(VL.text("Спросить Vecta AI")).accessibilityLabel(VL.text("Спросить Vecta AI"))
             }.padding(12).background(Ink.surface).cornerRadius(9).frame(maxWidth:760)
             if let validation=VectaUX.questionValidation(model.search) {Text(validation).font(.system(size:11)).foregroundColor(Ink.secondary)}
             if !model.libraryIndexMessage.isEmpty {HStack {Text(model.libraryIndexMessage).font(.system(size:11)).foregroundColor(Ink.muted);if model.libraryAssetsMissing {Button(VL.text("Установить ресурсы поиска"),action:model.installLibrarySearchAssets).buttonStyle(.plain).font(.system(size:11))}}}
@@ -316,7 +320,7 @@ struct NativeTransferStrip: View {
                 }
                 Button(VL.text("Отменить"), action: model.disconnect).buttonStyle(.plain).font(.system(size: 11)).foregroundColor(Ink.secondary)
             }
-            if let fraction = model.transferProgress?.fraction { ProgressView(value: fraction).tint(Ink.text) }
+            if let fraction = model.transferProgress?.fraction { ProgressView(value: fraction).tint(Ink.accent) }
             else { ProgressView().controlSize(.small) }
             HStack {
                 Text(model.transferProgress?.speedText ?? VL.text("Скорость: —")); Spacer()

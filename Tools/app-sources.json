@@ -73,6 +73,8 @@
   "App/NativeConferences.swift",
   "App/NativeMicrophoneCapture.swift",
   "App/NativeConferenceActivity.swift",
+  "App/NativeDailyReflection.swift",
+  "App/Views/DailyReflectionView.swift",
   "App/NativeConferenceMonitor.swift",
   "App/NativeConferenceSettings.swift"
 ]

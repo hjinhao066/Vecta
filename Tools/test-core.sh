@@ -6,6 +6,8 @@ xcrun swiftc -module-cache-path "$repo/.build/tests/module-cache" -O -swift-vers
 VECTA_TEST_LANGUAGE=ru "$repo/.build/tests/core-checks"
 xcrun swiftc -module-cache-path "$repo/.build/tests/module-cache" -swift-version 5 "$repo/Domain/VectaLocalization.swift" "$repo/App/NativeUXPolicy.swift" "$repo/Tests/NativeUIStateChecks.swift" -o "$repo/.build/tests/ui-state-checks"
 VECTA_TEST_LANGUAGE=ru "$repo/.build/tests/ui-state-checks"
+xcrun swiftc -module-cache-path "$repo/.build/tests/module-cache" -swift-version 5 "$repo/Domain/VectaLocalization.swift" "$repo/App/NativeTheme.swift" "$repo/App/NativeDailyReflection.swift" "$repo/Tests/DailyReflectionChecks.swift" -o "$repo/.build/tests/daily-reflection-checks"
+VECTA_TEST_LANGUAGE=en "$repo/.build/tests/daily-reflection-checks"
 if grep -REq 'deleteAllRecordings|removeDevice\(confirmedSerial:|onRemovalComplete' "$repo/App"; then
   echo "Recorder deletion must not be reachable from the app" >&2
   exit 1

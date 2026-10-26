@@ -256,8 +256,8 @@ struct DeviceSetupView: View {
             if completed && !selected { Image(systemName: "checkmark") }
             else { Text(String(index + 1)) }
         }.font(.system(size: 12, weight: .semibold)).frame(width: 24, height: 24)
-            .background(selected ? Ink.text : Ink.elevated)
-            .foregroundColor(selected ? Ink.canvas : (completed ? Ink.success : Ink.secondary)).clipShape(Circle())
+            .background(selected ? Ink.accent : Ink.elevated)
+            .foregroundColor(selected ? Ink.onAccent : (completed ? Ink.success : Ink.secondary)).clipShape(Circle())
     }
 }
 

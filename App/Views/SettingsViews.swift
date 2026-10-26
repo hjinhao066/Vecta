@@ -18,6 +18,7 @@ struct NativeGeneralSettings: View {
                 NativeApplicationBehaviorSettings(settings: model.applicationSettings)
                 NativeLanguagePicker(model:model).padding(20).background(Ink.surface).cornerRadius(9)
                 HStack {Text(VL.text("Оформление"));Spacer();Picker(VL.text("Тема"),selection:$appearance) {ForEach(VectaAppearance.allCases) {Text($0.title).tag($0.rawValue)}}.frame(width:200)}.padding(20).background(Ink.surface).cornerRadius(9)
+                NativeColorThemePicker().padding(20).background(Ink.surface).cornerRadius(9)
                 VStack(alignment: .leading, spacing: 16) {
                     Text(VL.text("Библиотека")).font(.system(size: 18, weight: .semibold))
                     HStack { Text(VL.text("Папка обработки")).foregroundColor(Ink.secondary); Spacer(); Text(VectaLegacyPaths.presentationFolder(model.library?.exporter.folderName)) }
@@ -306,5 +307,48 @@ struct NativeApplicationBehaviorSettings: View {
                 .toggleStyle(.checkbox)
             Text(VL.text("При закрытии окна Vecta продолжает синхронизацию и обработку записей. Открыть окно снова можно из Dock или строки меню. Чтобы завершить работу, выберите «Завершить Vecta» или нажмите ⌘Q. Если выключить эту настройку, закрытие окна завершит приложение.")).font(.system(size: 12)).foregroundColor(Ink.secondary).lineSpacing(4)
         }.padding(20).background(Ink.surface).cornerRadius(9)
+    }
+}
+
+/// Colour theme cards: each shows its own canvas, sidebar, accent and text in the current light or dark mode.
+struct NativeColorThemePicker: View {
+    @AppStorage(VectaColorTheme.preferenceKey) private var selection = "classic"
+    @State private var hovered: VectaColorTheme?
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(VL.text("Цветовая тема"))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 12)], alignment: .leading, spacing: 12) {
+                ForEach(VectaColorTheme.allCases) { theme in card(theme) }
+            }
+        }
+    }
+    private func card(_ theme: VectaColorTheme) -> some View {
+        let chosen = (VectaColorTheme(rawValue: selection) ?? .classic) == theme
+        return Button { selection = theme.rawValue } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        RoundedRectangle(cornerRadius: 2).fill(Ink.tone(.accent, in: theme)).frame(width: 22, height: 5)
+                        RoundedRectangle(cornerRadius: 2).fill(Ink.tone(.muted, in: theme)).frame(width: 18, height: 4)
+                        RoundedRectangle(cornerRadius: 2).fill(Ink.tone(.muted, in: theme)).frame(width: 14, height: 4)
+                    }.padding(8).frame(width: 40, alignment: .topLeading).frame(maxHeight: .infinity, alignment: .top).background(Ink.tone(.sidebar, in: theme))
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Aa").font(.system(size: 15, weight: .semibold)).foregroundColor(Ink.tone(.heading, in: theme))
+                        RoundedRectangle(cornerRadius: 2).fill(Ink.tone(.text, in: theme)).frame(width: 54, height: 4)
+                        RoundedRectangle(cornerRadius: 2).fill(Ink.tone(.secondary, in: theme)).frame(width: 40, height: 4)
+                    }.padding(8).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(Ink.tone(.canvas, in: theme))
+                }.frame(height: 62).clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Ink.border))
+                HStack(spacing: 6) {
+                    Text(theme.title).font(.system(size: 12, weight: chosen ? .semibold : .regular)).foregroundColor(Ink.text).lineLimit(1)
+                    Spacer(minLength: 0)
+                    if chosen { Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundColor(Ink.accent) }
+                }
+            }.padding(8).background(hovered == theme ? Ink.hover : Ink.elevated).cornerRadius(9)
+                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(chosen ? Ink.accent : Color.clear, lineWidth: 2))
+        }.buttonStyle(.plain).onHover { inside in hovered = inside ? theme : (hovered == theme ? nil : hovered) }
+            .help(theme.title).accessibilityLabel(theme.title)
+            .accessibilityValue(chosen ? VL.text("Выбрано") : VL.text("Не выбрано"))
+            .accessibilityAddTraits(chosen ? [.isSelected] : [])
     }
 }

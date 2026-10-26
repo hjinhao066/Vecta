@@ -17,8 +17,8 @@ struct QuietButton: ButtonStyle {
     var primary = false
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.system(size: 13, weight: .medium)).padding(.horizontal, 13).padding(.vertical, 8)
-            .foregroundColor(primary ? Ink.canvas : Ink.text)
-            .background(primary ? Ink.text.opacity(configuration.isPressed ? 0.8 : 1) : (configuration.isPressed ? Ink.hover : Ink.elevated))
+            .foregroundColor(primary ? Ink.onAccent : Ink.text)
+            .background(primary ? Ink.accent.opacity(configuration.isPressed ? 0.8 : 1) : (configuration.isPressed ? Ink.hover : Ink.elevated))
             .cornerRadius(7)
     }
 }

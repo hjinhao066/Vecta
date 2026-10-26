@@ -1188,5 +1188,18 @@
   "Whisper · английская и другие языки": "Whisper · English and other languages",
   "Модель Сбера GigaAM v3 на MLX. Распознаёт только русский язык, расставляет пунктуацию и обычно точнее Whisper на русской речи.": "Sber's GigaAM v3 running on MLX. Recognizes Russian only, adds punctuation and is usually more accurate than Whisper on Russian speech.",
   "WhisperKit · Whisper large-v3 Turbo. Многоязычная модель, подходит для английской речи и смешанных записей.": "WhisperKit · Whisper large-v3 Turbo. A multilingual model for English speech and mixed-language recordings.",
-  "Не удалось сохранить выбранную модель распознавания.": "Could not save the selected speech recognition model."
+  "Не удалось сохранить выбранную модель распознавания.": "Could not save the selected speech recognition model.",
+  "Ежедневная рефлексия": "Daily Reflection",
+  "Показать файл в Finder": "Show file in Finder",
+  "Выбрать папку…": "Choose folder…",
+  "Папка с ежедневными рефлексиями не найдена. Выберите папку с файлами вида 2026-10.md.": "The daily reflection folder was not found. Choose the folder that holds files like 2026-10.md.",
+  "В папке пока нет записей. Они появятся здесь сами, как только AI допишет отчёт за день.": "No reflections yet. They appear here on their own as soon as AI finishes the day’s report.",
+  "Читаем рефлексии…": "Reading reflections…",
+  "Не удалось прочитать папку с рефлексиями. Проверьте, что Google Drive подключён и Vecta разрешён доступ к нему.": "Couldn’t read the reflection folder. Check that Google Drive is connected and that Vecta is allowed to open it.",
+  "Сегодня": "Today",
+  "Выбрать": "Choose",
+  "Выполнено": "Done",
+  "Не выполнено": "Not done",
+  "Классическая": "Classic",
+  "Цветовая тема": "Color theme"
 }

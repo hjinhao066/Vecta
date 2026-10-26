@@ -22,7 +22,7 @@ struct NativeProcessingProgress:View {
                     Text((state.weightedEstimate ? "≈ ":"")+"\(Int(state.fraction*100)) %")
                         .font(.system(size:13,weight:.medium)).monospacedDigit().foregroundColor(Ink.text)
                 }
-                ProgressView(value:state.fraction).tint(Ink.text)
+                ProgressView(value:state.fraction).tint(Ink.accent)
                     .accessibilityLabel(VL.text("Общий прогресс обработки"))
                     .accessibilityValue(VL.text("\(Int(state.fraction*100)) процентов"))
             }.padding(.vertical,8)

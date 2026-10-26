@@ -1308,6 +1308,7 @@ private enum NativeOwnerTokenStore {
             model.destination = .ai; model.status = VL.text("Визуальная проверка: библиотека не открывается.")
             if !CommandLine.arguments.contains("--verify-speaker-ui") && !CommandLine.arguments.contains("--verify-public-demo") && !CommandLine.arguments.contains("--verify-conferences-ui") && !CommandLine.arguments.contains("--verify-recording-card") && !CommandLine.arguments.contains("--verify-formats-ui") {Task { await model.localAI?.refreshModels() }}
             if CommandLine.arguments.contains("--verify-conferences-ui") { model.destination = .conferences }
+            if let index=CommandLine.arguments.firstIndex(of:"--verify-destination"),CommandLine.arguments.indices.contains(index+1),let destination=NativeDestination(rawValue:CommandLine.arguments[index+1]) { model.destination = destination }
             if CommandLine.arguments.contains("--verify-formats-ui") {
                 do { try VectaAppChecks.prepareCustomFormatsUI(model: model, root: root, resources: resources) }
                 catch { fatalError("Synthetic formats fixture: \(error)") }
@@ -1365,6 +1366,15 @@ private enum NativeOwnerTokenStore {
         let verifying=VectaRuntimePreferences.isVerification
         let preferences=VL.preferences
         if verifying {preferences.set(CommandLine.arguments.contains("--verify-light") ? "light":"dark",forKey:"vecta.appearance")}
+        if verifying {
+            let index=CommandLine.arguments.firstIndex(of:"--verify-theme")
+            let theme=index.flatMap {CommandLine.arguments.indices.contains($0+1) ? VectaColorTheme(rawValue:CommandLine.arguments[$0+1]):nil} ?? .classic
+            preferences.set(theme.rawValue,forKey:VectaColorTheme.preferenceKey)
+            // Live switch, as a click on a theme card would do it.
+            if let switchIndex=CommandLine.arguments.firstIndex(of:"--verify-theme-switch"),CommandLine.arguments.indices.contains(switchIndex+1),let next=VectaColorTheme(rawValue:CommandLine.arguments[switchIndex+1]) {
+                DispatchQueue.main.asyncAfter(deadline:.now()+3) {preferences.set(next.rawValue,forKey:VectaColorTheme.preferenceKey)}
+            }
+        }
         if verifying && CommandLine.arguments.contains("--verify-recording-card") {
             window.contentView = NSHostingView(rootView: HStack(alignment: .top, spacing: 20) {
                 NativeMacRecordingCard(model: model, display: .init(phase: .idle, elapsed: 0), open: {}, settings: {})
@@ -1381,7 +1391,14 @@ private enum NativeOwnerTokenStore {
         window.contentView = NSHostingView(rootView: NativeAppRoot(model: model).defaultAppStorage(UserDefaults.standard))
         #endif
         window.isReleasedWhenClosed = false
-        window.center(); window.makeKeyAndOrderFront(nil); self.window = window
+        window.center(); self.window = window
+        #if VECTA_DEVELOPMENT
+        // Screenshot runs stay behind whatever the user is working in.
+        let background=VectaRuntimePreferences.isVerification && CommandLine.arguments.contains("--verify-background")
+        #else
+        let background=false
+        #endif
+        if background { window.orderBack(nil) } else { window.makeKeyAndOrderFront(nil) }
         let menu=NSMenu()
         func section(_ title:String)->NSMenu {
             let item=NSMenuItem(title:title,action:nil,keyEquivalent:"");let submenu=NSMenu(title:title);item.submenu=submenu;menu.addItem(item);return submenu
@@ -1440,7 +1457,7 @@ private enum NativeOwnerTokenStore {
             }
             source.resume(); terminationSignals.append(source)
         }
-        NSApp.activate(ignoringOtherApps: true)
+        if !background { NSApp.activate(ignoringOtherApps: true) }
         sleepObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification,
             object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in

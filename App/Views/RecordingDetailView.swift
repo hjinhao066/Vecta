@@ -50,7 +50,7 @@ struct NativeRecordingDetail: View {
                     ForEach(Array([VL.text("Саммари"), VL.text("Расшифровка"), VL.text("Ассистент AI")].enumerated()), id: \.offset) { index, name in
                         Button { tab = index } label: {
                             VStack(spacing: 6) { Text(name).font(.system(size: 13, weight: .medium)).foregroundColor(tab == index ? Ink.text : Ink.muted)
-                                Rectangle().fill(tab == index ? Ink.text : Color.clear).frame(height: 2) }
+                                Rectangle().fill(tab == index ? Ink.accent : Color.clear).frame(height: 2) }
                         }.buttonStyle(.plain).frame(width: index == 2 ? 102 : 92)
                     }
                     Spacer()

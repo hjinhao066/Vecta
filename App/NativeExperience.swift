@@ -6,7 +6,7 @@ import AVFoundation
 import NotePinTransport
 #endif
 
-enum NativeDestination: String { case library, device, ai, formats, settings,tasks,conferences }
+enum NativeDestination: String { case library, device, ai, formats, settings,tasks,conferences,reflection }
 
 /// Heavy alignment reads are serialized off-main; journal recovery stays with UI edits.
 actor NativeConversationRefresh {

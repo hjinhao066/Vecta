@@ -9,7 +9,7 @@ struct NativeRecognitionProgress: View {
                 Spacer(minLength:8)
                 if let current = progress.currentChunk { Text(VL.text("Фрагмент \(current)")) }
             }.font(.system(size:11)).foregroundColor(Ink.secondary)
-            ProgressView(value:progress.processedSeconds,total:progress.totalSeconds).tint(Ink.text)
+            ProgressView(value:progress.processedSeconds,total:progress.totalSeconds).tint(Ink.accent)
                 .accessibilityLabel(VL.text("Завершённые фрагменты распознавания"))
         }.frame(maxWidth:.infinity,alignment:.leading)
     }

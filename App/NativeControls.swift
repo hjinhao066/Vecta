@@ -93,8 +93,8 @@ struct VectaSegmentedControl<ID:Hashable>:View {
         Button {focused=choice.id;choose(choice.id)} label:{
             Text(choice.title).font(.system(size:12,weight:selection==choice.id ? .semibold:.medium))
                 .multilineTextAlignment(.center).padding(.horizontal,11).padding(.vertical,8)
-                .frame(maxWidth:.infinity).foregroundColor(selection==choice.id ? Ink.canvas:Ink.secondary)
-                .background(selection==choice.id ? Ink.text:Color.clear).cornerRadius(6)
+                .frame(maxWidth:.infinity).foregroundColor(selection==choice.id ? Ink.onAccent:Ink.secondary)
+                .background(selection==choice.id ? Ink.accent:Color.clear).cornerRadius(6)
         }.buttonStyle(.plain).disabled(!choice.enabled).focused($focused,equals:choice.id)
         .help(choice.help).accessibilityLabel(choice.title)
         .accessibilityValue(selection==choice.id ? VL.text("Выбрано"):VL.text("Не выбрано"))
