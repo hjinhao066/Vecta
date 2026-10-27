@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct NativeDailyReflectionScreen: View {
+    @ObservedObject var run: ReflectionRunController
     @StateObject private var store = DailyReflectionStore()
     @State private var selectedID: String? = Self.verificationArgument("--verify-reflection-day")
     @State private var hoveredID: String?
@@ -24,6 +25,11 @@ struct NativeDailyReflectionScreen: View {
                         .buttonStyle(.plain).foregroundColor(Ink.secondary).background(Ink.elevated).cornerRadius(7)
                         .help(VL.text("Показать файл в Finder")).accessibilityLabel(VL.text("Показать файл в Finder"))
                 }
+                Spacer(minLength: 12)
+                if let display = run.display { ReflectionRunStatus(display: display) }
+                Button(VL.text("Начать рефлексию")) { run.start() }
+                    .buttonStyle(QuietButton(primary: true)).disabled(run.display?.busy == true)
+                    .opacity(run.display?.busy == true ? 0.55 : 1).fixedSize()
             }.padding(.horizontal, 28).padding(.top, 28)
             if let problem = store.problem { message(problem, action: VL.text("Выбрать папку…")) }
             else if store.folder == nil { message(VL.text("Папка с ежедневными рефлексиями не найдена. Выберите папку с файлами вида 2026-10.md."), action: VL.text("Выбрать папку…")) }
@@ -44,6 +50,7 @@ struct NativeDailyReflectionScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear { store.start() }
         .onDisappear { store.stop() }
+        .onChange(of: run.display) { value in if value?.tone == .done { store.refresh(force: true) } }
     }
 
     private func message(_ text: String, action: String?) -> some View {
@@ -252,5 +259,29 @@ struct ReflectionMarkdownView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 7))
         .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Ink.border))
+    }
+}
+
+/// One line beside Start reflection: a coloured dot (yellow working, green done, red failed) and the step.
+struct ReflectionRunStatus: View {
+    let display: ReflectionRunDisplay
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var dim = false
+
+    private var color: Color {
+        switch display.tone { case .working: return Ink.warning; case .done: return Ink.success; case .failed: return Ink.error }
+    }
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Circle().fill(color).frame(width: 8, height: 8)
+                .opacity(display.busy && dim && !reduceMotion ? 0.35 : 1)
+                .animation(display.busy && !reduceMotion ? .easeInOut(duration: 1.1).repeatForever(autoreverses: true) : .default, value: dim)
+            Text(display.text).font(.system(size: 12.5)).foregroundColor(display.tone == .failed ? Ink.error : Ink.secondary)
+                .lineLimit(1).truncationMode(.tail)
+        }
+        .help(display.text).accessibilityElement(children: .combine)
+        .onAppear { dim = display.busy }
+        .onChange(of: display.busy) { busy in dim = busy }
     }
 }

@@ -367,6 +367,22 @@ import NotePinTransport
     }
 
     private var syncQueue: [NativeRecordingIdentity] = []
+    private var syncPlanned = 0, syncCopied = 0
+    private var lastSyncFailure: String?
+    lazy var reflectionRun: ReflectionRunController = {
+        let run = ReflectionRunController()
+        #if VECTA_DEVELOPMENT
+        if CommandLine.arguments.contains("--verify-reflection-run") {
+            reflectionFixture.files = ReflectionRunFiles.live; run.source = reflectionFixture
+            if CommandLine.arguments.contains("--verify-reflection-press") { DispatchQueue.main.async { run.start() } }
+            return run
+        }
+        #endif
+        run.source = self; return run
+    }()
+    #if VECTA_DEVELOPMENT
+    private let reflectionFixture = ReflectionFixturePull()
+    #endif
     var connecting = false
     private var connectionAttempt = UUID()
     private var standaloneUserID: String?
@@ -790,6 +806,7 @@ import NotePinTransport
                 download(identity: requestedDownload)
             } else if syncing {
                 syncQueue = library?.items.filter { $0.identity.serialNumber == serial && $0.remote != nil && $0.audioURL == nil }.map(\.identity) ?? []
+                syncCopied = 0; syncPlanned = syncQueue.count
                 downloadNext()
             } else {
                 releaseConnectionAfterSync()
@@ -800,8 +817,10 @@ import NotePinTransport
             guard let self, self.connectionAttempt == driverAttempt else { return }
             self.objectWillChange.send()
         }
-        next.onFailure = { [weak self] reason in
+        next.onFailure = { [weak self, weak next] reason in
             guard let self, self.connectionAttempt == driverAttempt else { return }
+            // While recording, the recorder never answers the list request (state 4099).
+            self.lastSyncFailure = reason == "timeout-list" && next?.recorderState?.state == 4099 ? "recording" : reason
             if self.wifiTransfer != nil {
                 self.finishFastTransfer(message: NativeConnectionMessage.failure(reason), cancel: true)
                 return
@@ -828,11 +847,11 @@ import NotePinTransport
                 guard let self, self.connectionAttempt == driverAttempt, let id = self.transferID else { return }
                 do {
                     _ = try await self.library?.publishCompletedMP3(url, for: id, recorderHighlights: next?.downloadedHighlightSeconds)
-                    self.downloadedForAnalysis.append(id)
+                    self.downloadedForAnalysis.append(id); self.syncCopied += 1
                     self.status = VL.text("Запись сохранена на Mac")
                 } catch {
                     self.library?.failTransfer(id, message: error.localizedDescription); self.status = error.localizedDescription
-                    self.syncing = false; self.syncQueue = []
+                    self.syncing = false; self.syncQueue = []; self.lastSyncFailure = "copy"
                 }
                 self.transferID = nil; self.transferring = false; self.clearTransferProgress()
                 if self.syncing { self.downloadNext() }
@@ -962,7 +981,7 @@ import NotePinTransport
                 finishFastTransfer(message: VL.text("Не удалось начать передачу записи по Wi‑Fi. Незавершённый файл не опубликован."), cancel: true)
                 return
             }
-            clearTransferProgress(); status = error.localizedDescription; syncing = false; syncQueue = []; transferring = false; driver?.stop(); connected = false; finishSyncAnalysis()
+            clearTransferProgress(); status = error.localizedDescription; syncing = false; syncQueue = []; transferring = false; driver?.stop(); connected = false; lastSyncFailure = "copy"; finishSyncAnalysis()
         }
     }
     func canDeleteRecording(_ identity: NativeRecordingIdentity) -> Bool {
@@ -1543,5 +1562,21 @@ private enum NativeOwnerTokenStore {
         VL.prepareApplicationPreferences()
         let app = NSApplication.shared; let delegate = NativeMacDelegate()
         app.delegate = delegate; app.setActivationPolicy(.regular); app.run(); withExtendedLifetime(delegate) {}
+    }
+}
+
+extension NativeMacModel: ReflectionPullSource {
+    /// Start reflection: copy what is still on the recorder, the same as a scheduled sync. Joins a sync already running.
+    func startReflectionPull() -> Bool {
+        guard savedDevice != nil else { return false }
+        if busy { return true }
+        lastSyncFailure = nil; syncPlanned = 0; syncCopied = 0
+        beginSync(automatic: true)
+        return true
+    }
+
+    var reflectionPull: ReflectionPull {
+        if busy { return syncPlanned > 0 ? .copying(done: min(syncCopied, syncPlanned), total: syncPlanned) : .waitingForRecorder }
+        return lastSyncFailure.map(ReflectionPull.failed) ?? .finished
     }
 }

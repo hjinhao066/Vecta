@@ -21,7 +21,7 @@ struct NativeMacView: View {
                 case .library:
                     if detail, model.selection != nil { NativeRecordingDetail(model: model, back: { detail = false }) }
                     else { library }
-                case .reflection: NativeDailyReflectionScreen()
+                case .reflection: NativeDailyReflectionScreen(run: model.reflectionRun)
                 case .conferences: NativeConferencesScreen(model: model)
                 case .device: NativeDeviceScreen(model: model)
                 case .ai:
