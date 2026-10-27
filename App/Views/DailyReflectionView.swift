@@ -18,18 +18,18 @@ struct NativeDailyReflectionScreen: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 10) {
-                ScreenTitle(title: VL.text("Ежедневная рефлексия"))
-                if store.folder != nil {
-                    Button { reveal() } label: { Image(systemName: "folder").font(.system(size: 14)).frame(width: 30, height: 30) }
-                        .buttonStyle(.plain).foregroundColor(Ink.secondary).background(Ink.elevated).cornerRadius(7)
-                        .help(VL.text("Показать файл в Finder")).accessibilityLabel(VL.text("Показать файл в Finder"))
+            // The step line sits beside the button; when the row is too narrow for it, it moves under the title.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    ScreenTitle(title: VL.text("Ежедневная рефлексия")).fixedSize()
+                    Spacer(minLength: 0)
+                    if let display = run.display { ReflectionRunStatus(display: display).fixedSize() }
+                    actions
                 }
-                Spacer(minLength: 12)
-                if let display = run.display { ReflectionRunStatus(display: display) }
-                Button(VL.text("Начать рефлексию")) { run.start() }
-                    .buttonStyle(QuietButton(primary: true)).disabled(run.display?.busy == true)
-                    .opacity(run.display?.busy == true ? 0.55 : 1).fixedSize()
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 10) { ScreenTitle(title: VL.text("Ежедневная рефлексия")); actions }
+                    if let display = run.display { ReflectionRunStatus(display: display) }
+                }
             }.padding(.horizontal, 28).padding(.top, 28)
             if let problem = store.problem { message(problem, action: VL.text("Выбрать папку…")) }
             else if store.folder == nil { message(VL.text("Папка с ежедневными рефлексиями не найдена. Выберите папку с файлами вида 2026-10.md."), action: VL.text("Выбрать папку…")) }
@@ -51,6 +51,17 @@ struct NativeDailyReflectionScreen: View {
         .onAppear { store.start() }
         .onDisappear { store.stop() }
         .onChange(of: run.display) { value in if value?.tone == .done { store.refresh(force: true) } }
+    }
+
+    @ViewBuilder private var actions: some View {
+        Button(VL.text("Начать рефлексию")) { run.start() }
+            .buttonStyle(QuietButton(primary: true)).disabled(run.display?.busy == true)
+            .opacity(run.display?.busy == true ? 0.55 : 1).fixedSize()
+        if store.folder != nil {
+            Button { reveal() } label: { Image(systemName: "folder").font(.system(size: 14)).frame(width: 30, height: 30) }
+                .buttonStyle(.plain).foregroundColor(Ink.secondary).background(Ink.elevated).cornerRadius(7)
+                .help(VL.text("Показать файл в Finder")).accessibilityLabel(VL.text("Показать файл в Finder"))
+        }
     }
 
     private func message(_ text: String, action: String?) -> some View {
@@ -266,7 +277,6 @@ struct ReflectionMarkdownView: View {
 struct ReflectionRunStatus: View {
     let display: ReflectionRunDisplay
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var dim = false
 
     private var color: Color {
         switch display.tone { case .working: return Ink.warning; case .done: return Ink.success; case .failed: return Ink.error }
@@ -274,14 +284,15 @@ struct ReflectionRunStatus: View {
 
     var body: some View {
         HStack(spacing: 7) {
-            Circle().fill(color).frame(width: 8, height: 8)
-                .opacity(display.busy && dim && !reduceMotion ? 0.35 : 1)
-                .animation(display.busy && !reduceMotion ? .easeInOut(duration: 1.1).repeatForever(autoreverses: true) : .default, value: dim)
+            // Breathes by size, not by fading, so the colour keeps its contrast. Driven by the clock rather than an
+            // implicit animation, so a layout change never sends the dot sliding across the text.
+            TimelineView(.animation(minimumInterval: 1.0 / 15, paused: !display.busy || reduceMotion)) { context in
+                let phase = display.busy && !reduceMotion ? (sin(context.date.timeIntervalSinceReferenceDate * 2.6) + 1) / 2 : 1
+                Circle().fill(color).frame(width: 8, height: 8).scaleEffect(0.6 + 0.4 * phase)
+            }.frame(width: 8, height: 8)
             Text(display.text).font(.system(size: 12.5)).foregroundColor(display.tone == .failed ? Ink.error : Ink.secondary)
-                .lineLimit(1).truncationMode(.tail)
+                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
         }
         .help(display.text).accessibilityElement(children: .combine)
-        .onAppear { dim = display.busy }
-        .onChange(of: display.busy) { busy in dim = busy }
     }
 }

@@ -88,12 +88,12 @@ import Foundation
         let third = requestID()!
         try check(third != second && kicks == 3, "A failed pull still lets the Mac process what it already has")
         try write(["id": third, "stage": "done", "written": [String]()], files.status); run.tick()
-        try check(run.display?.tone == .failed && run.display?.text == "The recorder is still recording — stop it and press again", "Recording reason")
+        try check(run.display?.tone == .failed && run.display?.text == "Recorder is still recording — stop it, then press again", "Recording reason")
 
         // Pipeline failures, one plain sentence each.
-        let reasons: [String?: String] = ["quota": "Model limit reached — the summary will be written after the limit resets",
+        let reasons: [String?: String] = ["quota": "Model limit reached — the summary waits for the reset",
                                           "signed_out": "The summary account is signed out", "transcribe": "Transcription failed",
-                                          "drive": "Summary saved on this Mac, but Google Drive hasn’t taken it yet",
+                                          "drive": "Saved on this Mac; Google Drive not updated yet",
                                           "crash": "Processing stopped unexpectedly", nil: "Couldn’t write the day’s summary"]
         for (reason, text) in reasons {
             let shown = ReflectionRunState.display(pull: .finished, requestID: "x", kickFailed: false,
