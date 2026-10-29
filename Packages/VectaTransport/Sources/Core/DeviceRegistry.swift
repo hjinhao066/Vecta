@@ -44,8 +44,8 @@ public struct PlaudCandidate: Identifiable, Equatable {
     public let rssi: Int
     public let isConnectable: Bool
     public var model: PlaudModel? { advertisement.flatMap { PlaudModel.identify(project: $0.projectCode, serial: $0.serialNumber) } }
-    public var displayName: String { model?.displayName ?? "Неизвестная модель Plaud" }
-    public var maskedSerial: String { advertisement.map { "••••" + $0.serialNumber.suffix(4) } ?? "Не определён" }
+    public var displayName: String { model?.displayName ?? "Unknown Plaud model" }
+    public var maskedSerial: String { advertisement.map { "••••" + $0.serialNumber.suffix(4) } ?? "Not detected" }
     public var canConnect: Bool { isConnectable && model != nil && advertisement?.protocolVersion != nil }
     public init(id: UUID, advertisement: NativeAdvertisement?, rssi: Int, isConnectable: Bool) {
         self.id = id; self.advertisement = advertisement; self.rssi = rssi; self.isConnectable = isConnectable

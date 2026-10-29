@@ -12,7 +12,7 @@ import Foundation
         precondition(VectaLanguage.preferred(in:defaults) == .english);checks+=1
         for language in VectaLanguage.allCases {
             defaults.set(language.rawValue,forKey:"Vecta.interfaceLanguage")
-            precondition(VectaLanguage.preferred(in:defaults) == language);checks+=1
+            precondition(VectaLanguage.preferred(in:defaults) == .english);checks+=1
             let decoded=try JSONDecoder().decode(VectaLanguage.self,from:JSONEncoder().encode(language))
             precondition(decoded == language);checks+=1
         }

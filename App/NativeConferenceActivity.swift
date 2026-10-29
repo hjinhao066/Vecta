@@ -12,10 +12,10 @@ struct NativeConferenceActivity: Equatable, Sendable {
     var audioActive: Bool { inputActive || outputActive }
     // IO flags are activity hints, never evidence of participant count.
     static let applications: [(id: String, name: String)] = [
-        ("us.zoom.xos", "Zoom"), ("ru.yandex.telemost", "Яндекс Телемост"),
+        ("us.zoom.xos", "Zoom"), ("ru.yandex.telemost", "Yandex Telemost"),
         ("com.microsoft.teams2", "Microsoft Teams"), ("com.microsoft.teams", "Microsoft Teams Classic"),
         ("com.apple.FaceTime", "FaceTime"), ("com.webex.meetingmanager", "Webex"),
-        ("com.google.Chrome", "Google Chrome"), ("ru.yandex.desktop.yandex-browser", "Яндекс Браузер"),
+        ("com.google.Chrome", "Google Chrome"), ("ru.yandex.desktop.yandex-browser", "Yandex Browser"),
         ("com.apple.Safari", "Safari"), ("org.mozilla.firefox", "Firefox"),
         ("com.microsoft.edgemac", "Microsoft Edge"), ("company.thebrowser.Browser", "Arc"),
         ("com.brave.Browser", "Brave"), ("com.tdesktop.Telegram", "Telegram"), ("com.hnc.Discord", "Discord")

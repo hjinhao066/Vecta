@@ -16,7 +16,6 @@ struct NativeGeneralSettings: View {
             VStack(alignment: .leading, spacing: 26) {
                 ScreenTitle(title: VL.text("Настройки"), subtitle: VL.text("Библиотека, устройство и локальный ИИ."))
                 NativeApplicationBehaviorSettings(settings: model.applicationSettings)
-                NativeLanguagePicker(model:model).padding(20).background(Ink.surface).cornerRadius(9)
                 HStack {Text(VL.text("Оформление"));Spacer();Picker(VL.text("Тема"),selection:$appearance) {ForEach(VectaAppearance.allCases) {Text($0.title).tag($0.rawValue)}}.frame(width:200)}.padding(20).background(Ink.surface).cornerRadius(9)
                 NativeColorThemePicker().padding(20).background(Ink.surface).cornerRadius(9).id("colorTheme")
                     .onAppear {

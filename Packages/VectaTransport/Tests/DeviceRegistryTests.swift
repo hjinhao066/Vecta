@@ -69,7 +69,7 @@ final class DeviceRegistryTests: XCTestCase {
     func testUnknownCandidateIsVisibleButCannotConnect() {
         let candidate = PlaudCandidate.observe(id: UUID(), manufacturer: nil, name: "PLAUD", services: [], rssi: -40, connectable: true)
         XCTAssertNotNil(candidate)
-        XCTAssertEqual(candidate?.displayName, "Неизвестная модель Plaud")
+        XCTAssertEqual(candidate?.displayName, "Unknown Plaud model")
         XCTAssertFalse(candidate?.canConnect ?? true)
     }
 

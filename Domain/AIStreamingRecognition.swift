@@ -145,7 +145,7 @@ struct AITranscriptAssembler {
             if votes.filter({ $0.value.contains(target) }).count == 1 { mapping[voice] = target }
         }
         func label(_ speaker: String?) -> String? {
-            speaker.map { mapping[$0] ?? "\($0) · фрагмент \(chunk.window.index + 1)" }
+            speaker.map { mapping[$0] ?? "\($0) · chunk \(chunk.window.index + 1)" }
         }
         for s in current {
             // Preserve complete boundary-crossing utterances. Never discard an

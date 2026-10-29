@@ -4,9 +4,8 @@ enum VectaLanguage:String,Codable,CaseIterable,Identifiable {
     case english="en",russian="ru"
     var id:String {rawValue}
     var nativeTitle:String {self == .english ? "English":"Русский"}
-    static func preferred(in defaults:UserDefaults)->Self {
-        defaults.string(forKey:"Vecta.interfaceLanguage").flatMap(Self.init(rawValue:)) ?? .english
-    }
+    /// The interface is English only. A language stored by an older build is ignored.
+    static func preferred(in defaults:UserDefaults)->Self {.english}
 }
 
 /// Interpolated values are never catalog keys or format directives.

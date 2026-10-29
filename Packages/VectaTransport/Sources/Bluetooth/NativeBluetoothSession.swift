@@ -109,7 +109,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
         guard NSRunningApplication.runningApplications(withBundleIdentifier: "dev.codex.plaudreceiver.a01a11651").isEmpty else {
             fail("sdk-recorder-still-running"); return
         }
-        transition(.preparing, "Готовим защищённое подключение…")
+        transition(.preparing, "Preparing the secure connection…")
         preparationTask = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
@@ -123,7 +123,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
                     DispatchQueue.main.async { [weak self] in
                         guard let self, !self.stopped, self.stage == .preparing else { return }
                         self.events.append(["preparationStep": step])
-                        self.transition(.preparing, step == "partner-key" ? "Получаем ключ для защищённого подключения…" : "Подтверждаем авторизацию диктофона…")
+                        self.transition(.preparing, step == "partner-key" ? "Getting the key for the secure connection…" : "Confirming the recorder authorization…")
                     }
                 }
                 guard !stopped else { return }
@@ -138,7 +138,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
                 DispatchQueue.main.async { [weak self] in
                     guard let self, !self.stopped else { return }
                     self.events.append(["bluetoothAuthorization": CBManager.authorization.rawValue])
-                    self.transition(.bluetooth, "Ожидаем готовность Bluetooth macOS…")
+                    self.transition(.bluetooth, "Waiting for macOS Bluetooth to be ready…")
                     self.central = CBCentralManager(delegate: self, queue: .main,
                         options: [CBCentralManagerOptionShowPowerAlertKey: false])
                 }
@@ -181,7 +181,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
         // from different requests or accept a partial library as complete.
         requestID = requestID == .max ? 1 : requestID + 1
         listCollector = ProtocolFileListCollector(requestID: requestID)
-        transition(.list, listRetryPolicy.retries == 0 ? "Получаем список записей…" : "Повторяем получение списка записей…")
+        transition(.list, listRetryPolicy.retries == 0 ? "Getting the recording list…" : "Retrying the recording list…")
         try send(ProtocolBootstrap.getFileList(requestID: requestID))
     }
     private func retryFileList() {
@@ -192,7 +192,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
     }
     private func fail(_ reason: String) {
         guard !stopped else { return }
-        events.append(["failure": reason]); transition(.failed, "Подключение остановлено: \(reason)")
+        events.append(["failure": reason]); transition(.failed, "Connection stopped: \(reason)")
         let pendingWiFi = wifiOpenCompletion; wifiOpenCompletion = nil
         saveReport(reason: reason); stop()
         pendingWiFi?(.failure(ProtocolWireError.invalidInput))
@@ -254,7 +254,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
     }
     private func scanForSavedDevice() {
         guard !stopped else { return }
-        transition(.scanning, "Ищем выбранное Bluetooth-устройство Plaud…")
+        transition(.scanning, "Looking for the selected Plaud Bluetooth device…")
         central?.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
     }
     private func fallbackFromCachedConnection() {
@@ -266,7 +266,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
     }
     private func connect(_ target: CBPeripheral) {
         central?.stopScan(); peripheral = target; target.delegate = self
-        transition(.connecting, "Подключаем выбранное устройство Plaud…")
+        transition(.connecting, "Connecting to the selected Plaud device…")
         central?.connect(target)
     }
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
@@ -323,7 +323,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         guard !stopped, stage == .connecting, peripheral === self.peripheral else { central.cancelPeripheralConnection(peripheral); return }
         cacheDeadline?.invalidate()
-        transition(.services, "Проверяем BLE-службы Plaud…")
+        transition(.services, "Checking the Plaud BLE services…")
         peripheral.discoverServices([CBUUID(string: "1910"), CBUUID(string: "180F")])
     }
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
@@ -360,7 +360,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
             fail("required-gatt-profile-absent"); return
         }
         command = rx; pendingNotifications = ["2BB0"]
-        transition(.notifications, "Включаем защищённый обмен…")
+        transition(.notifications, "Enabling secure communication…")
         peripheral.setNotifyValue(true, for: tx)
         if let data = chars.first(where: { NotePinGATT.canonicalUUID($0.uuid.uuidString) == "B004" && !$0.properties.intersection([.notify, .indicate]).isEmpty }) {
             pendingNotifications.insert("B004"); peripheral.setNotifyValue(true, for: data)
@@ -373,14 +373,14 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
         if pendingNotifications.isEmpty && stage == .notifications {
             if let profile = plaintextProfile {
                 do {
-                    transition(.owner, "Подтверждаем владельца Plaud…")
+                    transition(.owner, "Confirming the Plaud owner…")
                     enqueue([try profile.ownerHandshake(token: config.handshakeToken!, checked: false)])
                 } catch { fail("legacy-handshake-invalid") }
                 return
             }
             guard let identity else { fail("partner-identity-missing"); return }
             do {
-                transition(.signature, config.explicitlyConfirmedRecovery ? "Пробуем восстановить сопряжение NotePin S…" : "Проверяем подлинность диктофона…")
+                transition(.signature, config.explicitlyConfirmedRecovery ? "Trying to restore the NotePin S pairing…" : "Verifying the recorder…")
                 let packets = config.explicitlyConfirmedRecovery
                     ? try ProtocolBootstrap.recoverySignaturePackets(identity.serialSignature, model: .notePinS,
                         protocolVersion: config.advertisedProtocolVersion!)
@@ -458,7 +458,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
                 let bytes = Array(data)
                 if stage == .signature, bytes.count >= 2, bytes[0] == 0x11, bytes[1] == 0xfe {
                     guard let identity else { fail("partner-identity-missing"); return }
-                    transition(.rsa, "Проверяем ключ защищённого сеанса…")
+                    transition(.rsa, "Checking the secure session key…")
                     enqueue(try ProtocolBootstrap.publicKeyPackets(identity.publicKeyPEM)); return
                 }
                 // The pre-handshake waiter accepts FE11 OR FE12 (ledger §4).
@@ -467,7 +467,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
                 if stage == .signature || stage == .rsa, bytes.count >= 4, bytes[0] == 0x12, bytes[1] == 0xfe,
                    let encrypted = try bootstrap.accept(data), let identity {
                     crypto = try SessionMaterial.authenticate(rsaPlaintext: identity.privateKey.decryptBootstrap(encrypted))
-                    transition(.owner, "Подтверждаем существующую привязку…")
+                    transition(.owner, "Confirming the existing binding…")
                     try send(ProtocolBootstrap.ownerHandshake(token: config.handshakeToken ?? config.userID, checked: false))
                 }
                 return
@@ -488,14 +488,14 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
             if stage == .wifiStopping, Array(payload.prefix(3)) == [1, 0x1e, 0] {
                 guard payload.count == 3 || (payload.count == 4 && payload[3] == 0) else { throw ProtocolWireError.malformedResponse }
                 downloadCollector = nil
-                transition(.wifiOpening, "Включаем точку доступа PLAUD…")
+                transition(.wifiOpening, "Turning on the PLAUD access point…")
                 try send(Data([1, 0x0a, 0, 0])); return
             }
             if stage == .wifiOpening, Array(payload.prefix(3)) == [1, 0x0a, 0] {
                 let access = try ProtocolWiFiAccessPoint(response: payload, serial: config.serialNumber)
                 events.append(["wifiAccessPointHasPassword": !access.password.isEmpty, "wifiAccessPointPasswordEchoed": payload.count == 12])
                 wifiFeatures.beginTransfer()
-                transition(.wifiReady, "Точка доступа PLAUD готова…")
+                transition(.wifiReady, "PLAUD access point is ready…")
                 let completion = wifiOpenCompletion; wifiOpenCompletion = nil
                 completion?(.success(access)); return
             }
@@ -533,7 +533,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
                     isOggAudio = status.isOggAudio ?? false
                     supportsWiFi = status.supportsWiFi == true
                     onWiFiAvailabilityChanged?()
-                    transition(.state, "Диктофон подключён. Читаем состояние…")
+                    transition(.state, "Recorder connected. Reading its state…")
                     try send(ProtocolBootstrap.getState())
                     if protocolVersion >= 5 { try send(Data([1, 9, 0])) }
                 }
@@ -552,16 +552,16 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
                 let before = listCollector?.receivedCount ?? 0
                 let completed = try listCollector?.accept(page)
                 events.append(["listPage": true, "total": page.total, "startIndex": page.startIndex, "entries": page.files.count, "received": listCollector?.receivedCount ?? 0, "retry": listRetryPolicy.retries])
-                if completed == nil, (listCollector?.receivedCount ?? 0) > before { transition(.list, "Получаем список записей…") }
+                if completed == nil, (listCollector?.receivedCount ?? 0) > before { transition(.list, "Getting the recording list…") }
                 else { saveReport() }
                 if let files = completed {
                     recordings = files
-                    transition(.complete, "Подключено. Записей: \(files.count)")
+                    transition(.complete, "Connected. Recordings: \(files.count)")
                     idleDeadline?.invalidate()
                     if !maintainsConnection {
                     idleDeadline = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { [weak self] _ in
                         guard let self, self.stage == .complete || self.stage == .decoded else { return }
-                        self.stop(); self.onStatus?("Данные получены. Bluetooth-соединение освобождено.")
+                        self.stop(); self.onStatus?("Data received. Bluetooth connection released.")
                     }
                     }
                     onComplete?(files)
@@ -575,14 +575,14 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
                     onTransferValidated?()
                     downloadedRawURL = rawURL
                     downloadCollector = nil
-                    transition(.downloaded, "Файл передан и проверен: \(rawURL.lastPathComponent)")
+                    transition(.downloaded, "File transferred and verified: \(rawURL.lastPathComponent)")
                     decodeDownloadedAudio(rawURL)
                 } else if case .data = packet {
                     lastDownloadActivity=ProcessInfo.processInfo.systemUptime
                     if lastDownloadActivity-lastTransferPublication>=0.2 {
                         lastTransferPublication=lastDownloadActivity
                         onTransferProgress?(Int(collector.receivedByteCount), Int(collector.expectedByteSize))
-                        onStatus?("Передаём запись: \(collector.receivedByteCount) / \(collector.expectedByteSize) байт")
+                        onStatus?("Transferring recording: \(collector.receivedByteCount) / \(collector.expectedByteSize) bytes")
                     }
                 }
             }
@@ -604,7 +604,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
             downloadCollector = try AudioDownloadCollector(session: recording.sessionID,
                                                            expectedByteSize: recording.byteSize,
                                                            stagingURL: stagingURL, crcInitial: 0xffff, authenticatedPackets: crypto != nil)
-            transition(.download, "Передаём запись (\(recording.byteSize) байт)…")
+            transition(.download, "Transferring recording (\(recording.byteSize) bytes)…")
             // Bluetooth moves ~19 KB/s, so a fixed 300 s limit restarted every recording over ~5 MB
             // from zero forever. Fail only when the recorder stops sending data for a minute.
             deadline?.invalidate()
@@ -632,7 +632,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
                                                        model: .notePinS, protocolVersion: protocolVersion)
         try resetObservation.request()
         idleDeadline?.invalidate()
-        transition(.resetting, "Отправляем подтверждённый заводской сброс…")
+        transition(.resetting, "Sending the confirmed factory reset…")
         try send(payload)
     }
     private func finishFactoryReset(disconnected: Bool) {
@@ -647,7 +647,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
         guard !stopped, [.complete, .decoded].contains(stage), (crypto != nil || plaintextProfile != nil),
               peripheral?.state == .connected else { onFailure?("refresh-not-ready"); return }
         do {
-            transition(.state, "Обновляем список записей…")
+            transition(.state, "Refreshing the recording list…")
             try send(ProtocolBootstrap.getState())
         } catch { fail("refresh-failed") }
     }
@@ -659,7 +659,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
         wifiActive = true; wifiOpenCompletion = completion
         idleDeadline?.invalidate()
         do {
-            transition(.wifiStopping, "Останавливаем Bluetooth-передачу перед Fast transfer…")
+            transition(.wifiStopping, "Stopping the Bluetooth transfer before Fast transfer…")
             try send(Data([1, 0x1d, 0]))
         } catch { fail("wifi-stop-send-failed") }
     }
@@ -677,7 +677,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
     }
     func beginWiFiRecording(_ recording: ProtocolRecordingFile) throws {
         guard !stopped, authenticated, wifiActive, [.wifiReady, .decoded].contains(stage), recordings.contains(recording) else { throw ProtocolWireError.invalidInput }
-        transition(.wifiDownload, "Передаём запись по Wi‑Fi…")
+        transition(.wifiDownload, "Transferring recording over Wi-Fi…")
     }
     func finishWiFiRecording(_ rawURL: URL) throws {
         guard !stopped, wifiActive, stage == .wifiDownload else { throw ProtocolWireError.invalidInput }
@@ -699,7 +699,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
         guard !stopped, wifiActive, stage == .wifiDownload else { throw ProtocolWireError.invalidInput }
         downloadedRawURL = rawURL
         onTransferValidated?()
-        transition(.wifiReady, "Готовим MP3…")
+        transition(.wifiReady, "Preparing the MP3…")
         let task = startConversion(rawURL)
         Task { @MainActor [weak self] in
             do {
@@ -737,7 +737,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
 
     private func decodeDownloadedAudio(_ rawURL: URL) {
 
-        transition(.decoding, "Готовим MP3…")
+        transition(.decoding, "Preparing the MP3…")
         // The generic 45 s stage limit discarded every recording longer than about an hour after a
         // verified Wi-Fi delivery. Allow 60 s plus 1 s per 100 KB (a 35 MB / 2.4 h file gets ~7 min).
         let rawBytes = (try? rawURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
@@ -759,7 +759,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
                                     "duration": conversion.duration, "sampleRate": conversion.sampleRate,
                                     "concealedPackets": conversion.concealedPackets,
                                     "concealedDuration": Double(conversion.concealedPackets) * 0.02])
-                self.transition(.decoded, "Запись передана: \(conversion.outputURL.lastPathComponent)")
+                self.transition(.decoded, "Recording transferred: \(conversion.outputURL.lastPathComponent)")
                 self.onDownloadComplete?(conversion.outputURL)
             } catch {
                 guard let self, !self.stopped else { return }

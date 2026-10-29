@@ -15,7 +15,6 @@ label("Vecta",32,326,.white)
 label("Local. On your Mac.",14,298,NSColor(white:0.65,alpha:1))
 label("→",36,188,NSColor(white:0.6,alpha:1))
 label("Drag Vecta to Applications",14,60,NSColor(white:0.85,alpha:1))
-label("Перетащите Vecta в Applications",12,36,NSColor(white:0.6,alpha:1))
 image.unlockFocus()
 guard let tiff=image.tiffRepresentation,let bitmap=NSBitmapImageRep(data:tiff),let png=bitmap.representation(using:.png,properties:[:]) else {exit(1)}
 try png.write(to:output)

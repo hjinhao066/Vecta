@@ -46,37 +46,6 @@ struct NativeAppRoot:View {
     }
 }
 
-struct NativeLanguagePicker:View {
-    @ObservedObject var model:NativeMacModel
-    @State private var selection=VL.language
-    @State private var confirming=false
-    var body:some View {
-        VStack(alignment:.leading,spacing:12) {
-            HStack {
-                Text(VL.text("Язык приложения"))
-                Spacer()
-                Picker(VL.text("Язык приложения"),selection:$selection) {
-                    ForEach(VectaLanguage.allCases) {language in Text(language.nativeTitle).tag(language)}
-                }.labelsHidden().frame(width:200).disabled(!model.canRestartForLanguage)
-            }
-            Text(VL.text("Изменение языка применяется после перезапуска Vecta. Готовые записи, расшифровки и саммари не переводятся."))
-                .font(.system(size:12)).foregroundColor(Ink.secondary)
-            if !model.canRestartForLanguage {
-                Text(VL.text("Завершите текущую передачу, запись, загрузку или обработку перед сменой языка."))
-                    .font(.system(size:12)).foregroundColor(Ink.secondary)
-            }
-            if let error=model.languageRestartError {Text(error).font(.system(size:12)).foregroundColor(Ink.error)}
-        }
-        .onChange(of:selection) {language in if language != VL.language {confirming=true}}
-        .alert(VL.text("Перезапустить Vecta?"),isPresented:$confirming) {
-            Button(VL.text("Отмена"),role:.cancel) {selection=VL.language}
-            Button(VL.text("Сменить язык и перезапустить")) {model.restartForLanguage(selection)}.disabled(!model.canRestartForLanguage)
-        } message: {
-            Text(VL.text("Vecta закроется и снова откроется на выбранном языке. Ваши записи и настройки сохранятся."))
-        }
-    }
-}
-
 struct NativeWelcomeScreen:View {
     @ObservedObject var model:NativeMacModel
     let continueAction:()->Void
@@ -88,7 +57,6 @@ struct NativeWelcomeScreen:View {
                 Text(VL.text("Ваши записи. Ваш Mac. Ваш язык.")).font(.system(size:20,weight:.medium))
                 Text(VL.text("Сохраняйте записи с PLAUD, расшифровывайте речь и создавайте саммари локально на Mac. Записи и результаты не отправляются в облако."))
                     .font(.system(size:14)).foregroundColor(Ink.secondary).lineSpacing(5)
-                NativeLanguagePicker(model:model).padding(20).background(Ink.surface).cornerRadius(9)
                 Text(VL.text("Модели устанавливаются только по вашему запросу. Подключение диктофона настраивается отдельно."))
                     .font(.system(size:12)).foregroundColor(Ink.secondary)
                 Button(VL.text("Начать работу"),action:continueAction).buttonStyle(QuietButton(primary:true)).disabled(model.languageRestarting)

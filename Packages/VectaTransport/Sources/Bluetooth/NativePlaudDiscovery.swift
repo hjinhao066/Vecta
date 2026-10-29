@@ -27,14 +27,14 @@ public final class NativePlaudDiscovery: NSObject, CBCentralManagerDelegate {
                 diagnostics["alreadyConnected", default: 0] += 1
             }
             onCandidates?(Array(candidates.values))
-            onState?("Ищем Plaud рядом с Mac…")
+            onState?("Looking for Plaud near this Mac…")
             central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
             timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
-                self?.stop(); self?.onState?("Поиск завершён. Выберите устройство или повторите поиск.")
+                self?.stop(); self?.onState?("Search finished. Choose a device or search again.")
             }
-        case .unauthorized: onState?("Разрешите Bluetooth для Vecta в настройках macOS."); stop()
-        case .poweredOff: onState?("Bluetooth выключен."); stop()
-        case .unsupported: onState?("Bluetooth не поддерживается."); stop()
+        case .unauthorized: onState?("Allow Bluetooth for Vecta in macOS settings."); stop()
+        case .poweredOff: onState?("Bluetooth is off."); stop()
+        case .unsupported: onState?("Bluetooth is not supported."); stop()
         default: break
         }
     }
