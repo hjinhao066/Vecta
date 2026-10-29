@@ -34,6 +34,12 @@ struct NativeLibraryItem: Identifiable {
     }
     var createdAt: Date { local?.createdAt ?? Date(timeIntervalSince1970: TimeInterval(identity.sessionID)) }
     var duration: TimeInterval { local?.duration ?? remote?.duration ?? 0 }
+    /// True while the recording has no name of its own (not renamed, imported or titled by the AI).
+    var usesDefaultTitle: Bool { local.map { $0.generatedTitle == nil && $0.importedTitle == nil } ?? true }
+    /// What the screens show as the heading: an unnamed recording says when it started and ended.
+    var displayTitle: String {
+        usesDefaultTitle ? VL.text("Запись · ") + timeRange(from: createdAt, duration: duration) : title
+    }
 }
 
 struct NativeDeletedRecording: Codable, Identifiable {
