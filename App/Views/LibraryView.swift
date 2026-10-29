@@ -247,7 +247,7 @@ struct NativeMacView: View {
                                     VStack(alignment: .leading, spacing: 6) {
                                         Text(item.title).font(.system(size: 16, weight: .medium)).lineLimit(1)
                                         HStack(spacing: 12) {
-                                            Text(item.createdAt.vectaFormatted(date: .abbreviated, time: .shortened))
+                                            Text(timeRange(from: item.createdAt, duration: item.duration))
                                             if item.duration > 0 { Text(clock(item.duration)) }
                                             Text(item.audioURL == nil ? VL.text("На диктофоне") : VL.text("На Mac"))
                                         }.font(.system(size: 11)).foregroundColor(Ink.muted)

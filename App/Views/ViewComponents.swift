@@ -26,6 +26,15 @@ func clock(_ seconds: Double) -> String {
     guard seconds.isFinite, seconds > 0 else { return "0:00" }
     let value = Int(seconds); return String(format: "%d:%02d", value / 60, value % 60)
 }
+/// Start and end of a recording, e.g. "Oct 28, 2026 at 5:04 PM – 9:23 PM". The end repeats its date
+/// when the recording runs past midnight. Without a known duration only the start is shown.
+func timeRange(from start: Date, duration: Double, date: Date.FormatStyle.DateStyle = .abbreviated) -> String {
+    let first = start.vectaFormatted(date: date, time: .shortened)
+    guard duration.isFinite, duration >= 1 else { return first }
+    let end = start.addingTimeInterval(duration)
+    let last = Calendar.current.isDate(start, inSameDayAs: end) ? end.vectaFormatted(date: .omitted, time: .shortened) : end.vectaFormatted(date: date, time: .shortened)
+    return first + " – " + last
+}
 struct ScreenTitle: View {
     let title: String; var subtitle: String? = nil
     var body: some View {

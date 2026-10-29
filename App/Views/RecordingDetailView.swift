@@ -37,7 +37,7 @@ struct NativeRecordingDetail: View {
             Button(action: back) { Label(VL.text("Все записи"), systemImage: "chevron.left") }.buttonStyle(.plain).font(.system(size: 12)).foregroundColor(Ink.secondary)
             if let item = model.selection {
                 HStack(alignment: .top) {
-                    VStack(alignment:.leading,spacing:4) { Text(item.title).font(.system(size:20,weight:.semibold)).lineLimit(2); Text(item.createdAt.vectaFormatted(date:.abbreviated,time:.shortened)+" · "+clock(max(item.duration,model.duration))).font(.system(size:11)).foregroundColor(Ink.secondary) }.frame(maxWidth:.infinity,alignment:.leading)
+                    VStack(alignment:.leading,spacing:4) { Text(item.title).font(.system(size:20,weight:.semibold)).lineLimit(2); Text(timeRange(from:item.createdAt,duration:max(item.duration,model.duration))+" · "+clock(max(item.duration,model.duration))).font(.system(size:11)).foregroundColor(Ink.secondary) }.frame(maxWidth:.infinity,alignment:.leading)
                     Button { showingInformation=true } label: { Image(systemName:"info.circle") }.buttonStyle(QuietButton()).help(VL.text("Информация о записи")).accessibilityLabel(VL.text("Информация о записи"))
                     Button {showingExport=true} label:{Image(systemName:"square.and.arrow.up")}.buttonStyle(QuietButton()).help(VL.text("Экспорт…")).accessibilityLabel(VL.text("Экспорт записи"))
                 }
@@ -291,7 +291,7 @@ struct NativeRecordingDetail: View {
     private func information(_ item: NativeLibraryItem) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(VL.text("Об аудиозаписи")).font(.system(size: 20, weight: .semibold))
-            info(VL.text("Дата"), item.createdAt.vectaFormatted(date: .long, time: .shortened))
+            info(VL.text("Дата"), timeRange(from: item.createdAt, duration: max(item.duration, model.duration), date: .long))
             info(VL.text("Длительность"), clock(max(item.duration, model.duration)))
             info(VL.text("Хранение"), item.audioURL == nil ? VL.text("На диктофоне") : VL.text("На этом Mac"))
             if let result = model.analysis {
