@@ -300,7 +300,7 @@ actor NativeConversationRefresh {
         if let start,let end {playExcerpt(start:start,end:end,segment:nil)}
     }
     var analysisBusy: Bool { requestingAnalysis || (pendingAnalysis.map { id in analyses.contains { $0.request.id == id } } ?? false) || analyses.contains { $0.stage.isActive } }
-    var busy: Bool { purgingRecording != nil || resettingDevice || transferring || connecting || syncing || fastTransferPhase != nil }
+    var busy: Bool { purgingRecording != nil || resettingDevice || transferring || connecting || syncing || pipelinedConversions > 0 || fastTransferPhase != nil }
 
     func updateTransferProgress() { transferProgress = transferMetrics?.snapshot(at: ProcessInfo.processInfo.systemUptime) }
     func clearTransferProgress() { transferTimer?.invalidate(); transferTimer = nil; transferMetrics = nil; transferProgress = nil }

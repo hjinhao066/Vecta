@@ -368,6 +368,8 @@ import NotePinTransport
 
     private var syncQueue: [NativeRecordingIdentity] = []
     private var syncPlanned = 0, syncCopied = 0
+    /// Recordings already received over Wi-Fi whose MP3 is still being made in the background.
+    @Published private(set) var pipelinedConversions = 0
     private var lastSyncFailure: String?
     lazy var reflectionRun: ReflectionRunController = {
         let run = ReflectionRunController()
@@ -868,6 +870,8 @@ import NotePinTransport
             guard library?.items.first(where: { $0.identity == next })?.audioURL == nil else { continue }
             download(identity: next); return
         }
+        // The last recordings may still be converting; the sync ends when the final one is published.
+        guard pipelinedConversions == 0 else { return }
         if let device = savedDevice,
            let completed = try? SavedPlaudDevice(serialNumber: device.serialNumber, model: device.model, protocolVersion: device.protocolVersion, lastSynchronized: Date(), peripheralID: device.peripheralID) {
             do { try PlaudSelectionStore(url: services.appendingPathComponent("selected-device.json")).save(completed); savedDevice = completed }
@@ -877,6 +881,33 @@ import NotePinTransport
         if selected == nil { select(library?.items.first(where: { $0.identity.serialNumber == savedDevice?.serialNumber })?.identity) }
         status = autoSyncInterval.keepsConnection ? VL.text("Синхронизация завершена. Соединение с Plaud поддерживается."):VL.text("Синхронизация завершена. Все записи сохранены на Mac.")
         finishSyncAnalysis()
+    }
+    private func continueSyncWhileConverting(_ rawURL: URL, driver: NativeBluetoothSession) throws {
+        guard let id = transferID else { throw NativeRuntimeError.sessionUnavailable }
+        try driver.finishWiFiRecordingConcurrently(rawURL) { [weak self] result in
+            self?.publishPipelinedRecording(id, result)
+        }
+        pipelinedConversions += 1
+        transferID = nil; transferring = false; clearTransferProgress()
+        downloadNext()
+    }
+    private func publishPipelinedRecording(_ id: NativeRecordingIdentity, _ result: Result<(mp3: URL, highlights: [Double]?), Error>) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let converted = try result.get()
+                _ = try await self.library?.publishCompletedMP3(converted.mp3, for: id, recorderHighlights: converted.highlights)
+                self.downloadedForAnalysis.append(id); self.syncCopied += 1
+                if self.transferID == nil { self.status = VL.text("Запись сохранена на Mac") }
+            } catch {
+                self.library?.failTransfer(id, message: error.localizedDescription)
+                self.status = error.localizedDescription; self.lastSyncFailure = "copy"
+            }
+            self.pipelinedConversions -= 1
+            // Another recording is still on its way: its own completion carries on. Otherwise finish here.
+            guard self.pipelinedConversions == 0, self.transferID == nil, !self.transferring else { return }
+            if self.syncing { self.downloadNext() } else { self.finishSyncAnalysis() }
+        }
     }
     /// Executable regression check: no Bluetooth, production library or models.
     func verifySyncPreservesDetail() {
@@ -888,7 +919,11 @@ import NotePinTransport
         conversation.identities[person.id]=person
         select(id)
         precondition(analysisID==version && history=="saved" && progress==17 && focusedSegment==3)
-        syncing=true; downloadNext()
+        // A recording still converting in the background keeps the sync open; it ends with the last one.
+        syncing=true; pipelinedConversions=1; downloadNext()
+        precondition(syncing && busy)
+        pipelinedConversions=0; downloadNext()
+        precondition(!syncing && !busy)
         precondition(selected==id && analysisID==version && history=="saved")
         precondition(progress==17 && duration==47 && waveform==[0.2,0.8])
         precondition(conversation.identities[person.id]==person && playbackNavigationID==navigation)
@@ -1215,7 +1250,12 @@ extension NativeMacModel {
         }
         transfer.onFileReceived = { [weak self, weak driver] rawURL in
             guard let self, let driver, self.connectionAttempt == attempt, self.wifiCleanupTask == nil else { return }
-            do { try driver.finishWiFiRecording(rawURL) }
+            do {
+                // More recordings are waiting (an 8 h day is two files): ask for the next one on this
+                // Wi-Fi session now, because the recorder closes it ~16 s after its last delivery.
+                if self.syncing, !self.syncQueue.isEmpty { try self.continueSyncWhileConverting(rawURL, driver: driver) }
+                else { try driver.finishWiFiRecording(rawURL) }
+            }
             catch { self.finishFastTransfer(message: VL.text("Не удалось подготовить переданную запись. Исходный файл на PLAUD сохранён."), cancel: true) }
         }
         transfer.onFailure = { [weak self] message in

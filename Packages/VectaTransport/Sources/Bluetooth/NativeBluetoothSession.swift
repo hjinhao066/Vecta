@@ -691,6 +691,50 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
         try? send(Data([1, 0x0d, 0]))
     }
 
+    /// Hands a verified Wi-Fi delivery to a background conversion and frees the session at once, so the
+    /// next recording of the sync can be requested while this one converts. The recorder closes its
+    /// access point about 16 s after the last file, and converting a 5 h recording takes over a minute:
+    /// waiting for the MP3 first lost every later recording of the sync to the next synchronization.
+    func finishWiFiRecordingConcurrently(_ rawURL: URL, completion: @escaping @MainActor (Result<(mp3: URL, highlights: [Double]?), Error>) -> Void) throws {
+        guard !stopped, wifiActive, stage == .wifiDownload else { throw ProtocolWireError.invalidInput }
+        downloadedRawURL = rawURL
+        onTransferValidated?()
+        transition(.wifiReady, "Готовим MP3…")
+        let task = startConversion(rawURL)
+        Task { @MainActor [weak self] in
+            do {
+                let conversion = try await task.value
+                self?.events.append(["decodedSamples": conversion.decodedSamples,
+                                     "duration": conversion.duration, "sampleRate": conversion.sampleRate,
+                                     "concealedPackets": conversion.concealedPackets,
+                                     "concealedDuration": Double(conversion.concealedPackets) * 0.02])
+                self?.downloadedMP3URL = conversion.outputURL
+                completion(.success((conversion.outputURL, conversion.recorderHighlightSeconds)))
+            } catch {
+                self?.events.append(["audioDecodingError": String(describing: error)])
+                completion(.failure(error))
+            }
+        }
+    }
+
+    private func startConversion(_ rawURL: URL) -> Task<NativeAudioConversion, Error> {
+        let privateKey = identity?.privateKey
+        let defaultChannels = audioChannels
+        let readsHighlights = config.deviceType == "notepins" && protocolVersion == 20
+        let outputURL = rawURL.deletingPathExtension().appendingPathExtension("mp3")
+        return Task.detached(priority: .userInitiated) {
+            let input = try FileHandle(forReadingFrom: rawURL)
+            let prefix = try input.read(upToCount: EncryptedAudioHeader.size) ?? Data()
+            try input.close()
+            let header = EncryptedAudioHeader.isEncrypted(prefix) ? try EncryptedAudioHeader(data: prefix) : nil
+            let channels = header.map { Int($0.channels) } ?? defaultChannels
+            let duration = header.map { Double($0.durationSeconds) }
+            return try NativeAudioConverter.convert(rawURL: rawURL, outputURL: outputURL,
+                channels: channels, expectedDuration: duration, privateKey: privateKey,
+                recoverDamagedRecorderPackets: true, readRecorderHighlights: readsHighlights)
+        }
+    }
+
     private func decodeDownloadedAudio(_ rawURL: URL) {
 
         transition(.decoding, "Готовим MP3…")
@@ -702,21 +746,7 @@ final class NativeBluetoothSession: NSObject, CBCentralManagerDelegate, CBPeriph
             guard let self, !self.stopped, self.stage == .decoding else { return }
             self.fail("timeout-decoding")
         }
-        let privateKey = identity?.privateKey
-        let defaultChannels = audioChannels
-        let readsHighlights = config.deviceType == "notepins" && protocolVersion == 20
-        let outputURL = rawURL.deletingPathExtension().appendingPathExtension("mp3")
-        let task = Task.detached(priority: .userInitiated) {
-            let input = try FileHandle(forReadingFrom: rawURL)
-            let prefix = try input.read(upToCount: EncryptedAudioHeader.size) ?? Data()
-            try input.close()
-            let header = EncryptedAudioHeader.isEncrypted(prefix) ? try EncryptedAudioHeader(data: prefix) : nil
-            let channels = header.map { Int($0.channels) } ?? defaultChannels
-            let duration = header.map { Double($0.durationSeconds) }
-            return try NativeAudioConverter.convert(rawURL: rawURL, outputURL: outputURL,
-                channels: channels, expectedDuration: duration, privateKey: privateKey,
-                recoverDamagedRecorderPackets: true, readRecorderHighlights: readsHighlights)
-        }
+        let task = startConversion(rawURL)
         decodingTask = task
         Task { @MainActor [weak self] in
             do {
