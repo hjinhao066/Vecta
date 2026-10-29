@@ -21,6 +21,15 @@ struct NativeRemoteRecording: Equatable, Identifiable {
     var id: NativeRecordingIdentity { identity }
 }
 
+/// Start and end of a recording, e.g. "Oct 28, 2026 at 5:04 PM – 9:23 PM". The end repeats its date
+/// when the recording runs past midnight. Without a known duration only the start is shown.
+func timeRange(from start: Date, duration: Double, date: Date.FormatStyle.DateStyle = .abbreviated) -> String {
+    let first = start.vectaFormatted(date: date, time: .shortened)
+    guard duration.isFinite, duration >= 1 else { return first }
+    let end = start.addingTimeInterval(duration)
+    let last = Calendar.current.isDate(start, inSameDayAs: end) ? end.vectaFormatted(date: .omitted, time: .shortened) : end.vectaFormatted(date: date, time: .shortened)
+    return first + " – " + last
+}
 struct NativeLibraryItem: Identifiable {
     let identity: NativeRecordingIdentity
     let local: VectaRecording?
