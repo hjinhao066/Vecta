@@ -22,6 +22,7 @@ struct NativeDailyReflectionScreen: View {
     }
 
     private var showingBoard: Bool { selectedID == Self.boardID }
+    private var selectedPeriod: ReflectionPeriod? { selectedID.flatMap { id in store.periods.first { "period:" + $0.id == id } } }
     private var selected: DailyReflectionDay? { store.days.first { $0.id == selectedID } ?? store.days.first }
 
     /// A `vecta://reflection?day=…&t=HH:MM:SS` link: open that day's transcript at that sentence and play it.
@@ -59,6 +60,7 @@ struct NativeDailyReflectionScreen: View {
                         dayList.frame(width: compact ? 200 : 252)
                         Rectangle().fill(Ink.border).frame(width: 1)
                         if showingBoard { board(compact: compact) }
+                        else if let period = selectedPeriod { periodReader(period, compact: compact) }
                         else if let day = selected { reader(day, compact: compact) } else { Spacer() }
                     }
                 }.overlay(alignment: .top) { Rectangle().fill(Ink.border).frame(height: 1) }
@@ -105,6 +107,11 @@ struct NativeDailyReflectionScreen: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 2, pinnedViews: [.sectionHeaders]) {
                 boardRow
+                if !store.periods.isEmpty {
+                    Text(VL.text("Weeks and months")).font(.system(size: 11, weight: .semibold)).foregroundColor(Ink.muted)
+                        .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 4).frame(maxWidth: .infinity, alignment: .leading)
+                    ForEach(store.periods.prefix(6)) { periodRow($0) }
+                }
                 ForEach(months, id: \.0) { month, days in
                     Section {
                         ForEach(days) { day in row(day) }
@@ -139,8 +146,30 @@ struct NativeDailyReflectionScreen: View {
             .accessibilityLabel(VL.text("To do")).accessibilityValue("\(open)")
     }
 
+    private func periodRow(_ period: ReflectionPeriod) -> some View {
+        let isSelected = selectedID == "period:" + period.id
+        return Button { selectedID = "period:" + period.id } label: {
+            HStack(spacing: 9) {
+                RoundedRectangle(cornerRadius: 1.5).fill(isSelected ? Ink.accent : Color.clear).frame(width: 3)
+                Image(systemName: period.kind == .week ? "calendar" : "calendar.badge.clock").font(.system(size: 12)).foregroundColor(Ink.accent)
+                Text(period.title).font(.system(size: 12.5, weight: .medium)).foregroundColor(Ink.text).lineLimit(2).multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+            }.padding(.vertical, 8).padding(.trailing, 10)
+                .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                .background(isSelected ? Ink.selection : Color.clear).cornerRadius(7)
+        }.buttonStyle(.plain).accessibilityLabel(period.title)
+    }
+
+    private func periodReader(_ period: ReflectionPeriod, compact: Bool) -> some View {
+        ScrollView {
+            ReflectionMarkdownView(blocks: period.blocks, base: period.file.deletingLastPathComponent(), jump: jump)
+                .frame(maxWidth: 960, alignment: .leading).padding(.horizontal, compact ? 20 : 36).padding(.top, 14).padding(.bottom, 48)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }.id(period.id)
+    }
+
     private func row(_ day: DailyReflectionDay) -> some View {
-        let isSelected = !showingBoard && day.id == selected?.id
+        let isSelected = !showingBoard && selectedPeriod == nil && day.id == selected?.id
         return Button { selectedID = day.id } label: {
             HStack(alignment: .top, spacing: 9) {
                 RoundedRectangle(cornerRadius: 1.5).fill(isSelected ? Ink.accent : Color.clear).frame(width: 3)

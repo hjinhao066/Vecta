@@ -135,6 +135,15 @@ import Foundation
         let transcript = try JSONDecoder().decode(ReflectionTranscript.self, from: Data(json.utf8))
         try check(transcript.segment(at: "13:00:00")?.text == "再见" && transcript.segment(at: "12:51:30")?.text == "你好" && transcript.segment(at: "23:59:59")?.text == "再见",
                   "A link time finds the first sentence at or after it")
+        let periodFolder = FileManager.default.temporaryDirectory.appendingPathComponent("reflection-periods-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: periodFolder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: periodFolder) }
+        try "## 2026 年第 44 周\n\n#### 待办\n新增 3 条\n".write(to: periodFolder.appendingPathComponent("week-2026-W44.md"), atomically: true, encoding: .utf8)
+        try "## 2026 年 10 月\n".write(to: periodFolder.appendingPathComponent("month-2026-10.md"), atomically: true, encoding: .utf8)
+        try "x".write(to: periodFolder.appendingPathComponent("notes.md"), atomically: true, encoding: .utf8)
+        let periods = ReflectionPeriodSource.load(folder: periodFolder)
+        try check(periods.map(\.id) == ["week-2026-W44", "month-2026-10"] && periods[0].title == "2026 年第 44 周" && periods[0].kind == .week, "Weeks come before months and take the heading as title")
+        try check(ReflectionPeriodSource.signature(folder: periodFolder).contains("week-2026-W44.md") && !ReflectionPeriodSource.signature(folder: periodFolder).contains("notes"), "Only period files count")
         print("PASS \(assertions) daily reflection and theme assertions")
     }
 }

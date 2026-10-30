@@ -123,6 +123,8 @@ enum DailyReflectionSource {
     @Published private(set) var folder: URL?
     @Published private(set) var problem: String?
     @Published private(set) var loaded = false
+    @Published private(set) var periods: [ReflectionPeriod] = []
+    private var periodSignature: String?
     private var signature: String?
     private var loading = false
     private var timer: Timer?
@@ -142,7 +144,15 @@ enum DailyReflectionSource {
         refresh(force: true)
     }
 
+    func refreshPeriods() {
+        let current = ReflectionPeriodSource.signature()
+        guard current != periodSignature else { return }
+        periodSignature = current
+        periods = ReflectionPeriodSource.load()
+    }
+
     func refresh(force: Bool = false) {
+        refreshPeriods()
         guard !loading else { return }
         let folder = DailyReflectionSource.folder()
         if folder != self.folder { self.folder = folder; signature = nil }
@@ -537,5 +547,40 @@ struct ReflectionTranscript: Decodable, Equatable {
     static func load(day: String, folder: URL = folder()) -> ReflectionTranscript? {
         guard let data = try? Data(contentsOf: folder.appendingPathComponent("\(day).逐字稿.json")) else { return nil }
         return try? JSONDecoder().decode(ReflectionTranscript.self, from: data)
+    }
+}
+
+/// A weekly or monthly review the pipeline writes beside the day transcripts (`week-2026-W44.md`, `month-2026-10.md`).
+struct ReflectionPeriod: Identifiable, Equatable {
+    enum Kind: Equatable { case week, month }
+    let id: String
+    let kind: Kind
+    let title: String
+    let file: URL
+    let blocks: [ReflectionBlock]
+}
+
+enum ReflectionPeriodSource {
+    /// Newest first: weeks, then months.
+    static func load(folder: URL = ReflectionTranscript.folder()) -> [ReflectionPeriod] {
+        let names = ((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []).sorted(by: >)
+        return names.compactMap { name -> ReflectionPeriod? in
+            guard name.hasSuffix(".md"), name.hasPrefix("week-") || name.hasPrefix("month-"),
+                  let text = try? String(contentsOf: folder.appendingPathComponent(name), encoding: .utf8) else { return nil }
+            let blocks = ReflectionMarkdown.parse(text)
+            var title = String(name.dropLast(3))
+            if case .heading(_, let heading)? = blocks.first { title = heading }
+            return ReflectionPeriod(id: String(name.dropLast(3)), kind: name.hasPrefix("week-") ? .week : .month,
+                                    title: title, file: folder.appendingPathComponent(name), blocks: blocks)
+        }.sorted { ($0.kind == .week ? 0 : 1, $1.id) < ($1.kind == .week ? 0 : 1, $0.id) }
+    }
+
+    /// Changes when a file is added or rewritten.
+    static func signature(folder: URL = ReflectionTranscript.folder()) -> String {
+        let names = ((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []).filter { $0.hasPrefix("week-") || $0.hasPrefix("month-") }.sorted()
+        return names.map { name in
+            let values = try? folder.appendingPathComponent(name).resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+            return "\(name):\(values?.fileSize ?? -1):\(values?.contentModificationDate?.timeIntervalSince1970 ?? 0)"
+        }.joined(separator: "|")
     }
 }
