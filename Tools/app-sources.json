@@ -76,6 +76,7 @@
   "App/NativeDailyReflection.swift",
   "App/NativeReflectionRun.swift",
   "App/Views/DailyReflectionView.swift",
+  "App/Views/ReflectionExtras.swift",
   "App/NativeConferenceMonitor.swift",
   "App/NativeConferenceSettings.swift"
 ]

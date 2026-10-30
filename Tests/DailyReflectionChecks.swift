@@ -73,6 +73,68 @@ import Foundation
         }
         let classic = VectaColorTheme.classic.palette
         try check(classic[.canvas]! == (0xFAFAFA, 0x090A0B) && classic[.text]! == (0x171719, 0xF5F5F5) && classic[.accent]! == classic[.text]!, "Classic keeps the original black and white look")
+
+        // Time allocation, task ids, ticks and the day transcript.
+        let planned = """
+        #### 待办
+        - [ ] [12:51:30](vecta://reflection?day=2026-10-28&t=12:51:30) 整理 Mac 任务 <!-- rt-aa11bb22 -->
+        - [ ] [13:16:02](vecta://reflection?day=2026-10-28&t=13:16:02) 算股市亏损 <!-- rt-cc33dd44 -->
+        - [ ] 没有编号的一条
+
+        #### 时间分配
+        🟧🟧🟦
+
+        - 🟧 **上班** 1 小时
+        - 🟦 **上课** 0.5 小时
+
+        覆盖 1.5 小时。
+        <!-- plaud-hours {"hours": {"上课": 0.5, "上班": 1.0}, "colors": {"上班": "#F2A33A", "上课": "#4C8DF6"}, "notes": {"上班": "出餐"}, "covered": 1.5} -->
+
+        #### 时间线
+        - 12:00 在上班
+        """
+        let planBlocks = ReflectionMarkdown.parse(planned)
+        var found: ReflectionHours?
+        var planItems: [ReflectionListItem] = []
+        for block in planBlocks {
+            if case .hours(let value) = block { found = value }
+            if case .list(let list) = block, planItems.isEmpty { planItems = list }
+        }
+        try check(planItems.count == 3 && planItems[0].id == "rt-aa11bb22" && planItems[1].id == "rt-cc33dd44" && planItems[2].id == nil, "Task ids come off the end of the line")
+        try check(!planItems[0].text.contains("<!--") && planItems[0].text.contains("整理 Mac 任务"), "The id comment is not shown")
+        try check(found?.entries.map(\.name) == ["上班", "上课"] && found?.entries[0].hex == "#F2A33A" && found?.entries[0].note == "出餐" && found?.covered == 1.5,
+                  "Hours keep the review's category order, colours and notes")
+        try check(planBlocks.contains { if case .paragraph(let text) = $0 { return text.contains("🟧") } else { return false } } == false
+                  && planBlocks.contains { if case .list(let list) = $0 { return list.contains { $0.text.contains("1 小时") } } else { return false } } == false,
+                  "The text version of the hours is replaced, not shown twice")
+        try check(planBlocks.contains { if case .heading(_, let title) = $0 { return title == "时间线" } else { return false } }, "Sections after the hours block survive")
+
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("reflection-checks-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let checks = ReflectionChecks(file: file)
+        let three = [ReflectionListItem(level: 0, marker: nil, task: false, text: "a", id: "rt-1"),
+                     ReflectionListItem(level: 0, marker: nil, task: false, text: "b", id: "rt-2"),
+                     ReflectionListItem(level: 0, marker: nil, task: false, text: "c", id: "rt-3")]
+        try check(checks.ordered(three).map(\.text) == ["a", "b", "c"], "Untouched tasks keep their written order")
+        checks.set("rt-2", done: true, now: Date(timeIntervalSince1970: 100))
+        try check(checks.ordered(three).map(\.text) == ["a", "c", "b"], "A ticked task drops to the bottom")
+        checks.set("rt-1", done: true, now: Date(timeIntervalSince1970: 200))
+        try check(checks.ordered(three).map(\.text) == ["c", "b", "a"], "Ticked tasks sit in the order they were ticked")
+        checks.set("rt-2", done: false, now: Date(timeIntervalSince1970: 300))
+        try check(checks.ordered(three).map(\.text) == ["b", "c", "a"], "Unticking returns the task to its written place")
+        let reloaded = ReflectionChecks(file: file)
+        try check(reloaded.isDone("rt-1", fallback: false) && !reloaded.isDone("rt-2", fallback: true) && reloaded.isDone("rt-9", fallback: true), "Ticks survive a restart; unknown ids use the file's own state")
+        let mixed = [ReflectionListItem(level: 0, marker: nil, task: false, text: "x", id: "rt-1"), ReflectionListItem(level: 0, marker: nil, task: nil, text: "plain")]
+        try check(reloaded.ordered(mixed).map(\.text) == ["x", "plain"], "A list that is not all tasks is left alone")
+
+        let json = """
+        {"day": "2026-10-28", "recordings": {"s1": {"audio": "/tmp/a.mp3", "start": "2026-10-28T12:51:00-07:00", "duration": 100.0}},
+         "segments": [{"t": "12:51:30", "at": "x", "sha": "s1", "offset": 30.0, "end": 33.0, "speaker": "me", "text": "你好"},
+                      {"t": "13:16:02", "at": "x", "sha": "s1", "offset": 60.0, "end": 63.0, "speaker": null, "text": "再见"}]}
+        """
+        let transcript = try JSONDecoder().decode(ReflectionTranscript.self, from: Data(json.utf8))
+        try check(transcript.segment(at: "13:00:00")?.text == "再见" && transcript.segment(at: "12:51:30")?.text == "你好" && transcript.segment(at: "23:59:59")?.text == "再见",
+                  "A link time finds the first sentence at or after it")
         print("PASS \(assertions) daily reflection and theme assertions")
     }
 }

@@ -6,6 +6,13 @@ struct NativeDailyReflectionScreen: View {
     @StateObject private var store = DailyReflectionStore()
     @State private var selectedID: String? = Self.verificationArgument("--verify-reflection-day")
     @State private var hoveredID: String?
+    @State private var mode: ReflectionMode = .review
+    @State private var transcript: ReflectionTranscript?
+    @State private var request: ReflectionJumpRequest?
+    @StateObject private var player = ReflectionAudioPlayer()
+    @ObservedObject private var checks = ReflectionChecks.shared
+    private static let boardID = "__todos__"
+    enum ReflectionMode: Hashable { case review, transcript }
 
     private static func verificationArgument(_ name: String) -> String? {
         #if VECTA_DEVELOPMENT
@@ -14,7 +21,16 @@ struct NativeDailyReflectionScreen: View {
         return nil
     }
 
+    private var showingBoard: Bool { selectedID == Self.boardID }
     private var selected: DailyReflectionDay? { store.days.first { $0.id == selectedID } ?? store.days.first }
+
+    /// A `vecta://reflection?day=…&t=HH:MM:SS` link: open that day's transcript at that sentence and play it.
+    private func jump(day: String, time: String) {
+        guard store.days.contains(where: { $0.id == day }) else { return }
+        request = ReflectionJumpRequest(day: day, time: time)
+        mode = .transcript
+        selectedID = day
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -42,14 +58,18 @@ struct NativeDailyReflectionScreen: View {
                     HStack(spacing: 0) {
                         dayList.frame(width: compact ? 200 : 252)
                         Rectangle().fill(Ink.border).frame(width: 1)
-                        if let day = selected { reader(day, compact: compact) } else { Spacer() }
+                        if showingBoard { board(compact: compact) }
+                        else if let day = selected { reader(day, compact: compact) } else { Spacer() }
                     }
                 }.overlay(alignment: .top) { Rectangle().fill(Ink.border).frame(height: 1) }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onAppear { store.start() }
-        .onDisappear { store.stop() }
+        .onAppear { store.start(); checks.reload() }
+        .onDisappear { store.stop(); player.stop() }
+        .onChange(of: selectedID) { value in
+            if request?.day != value { mode = .review; player.stop() }
+        }
         .onChange(of: run.display) { value in if value?.tone == .done { store.refresh(force: true) } }
     }
 
@@ -84,6 +104,7 @@ struct NativeDailyReflectionScreen: View {
     private var dayList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 2, pinnedViews: [.sectionHeaders]) {
+                boardRow
                 ForEach(months, id: \.0) { month, days in
                     Section {
                         ForEach(days) { day in row(day) }
@@ -98,8 +119,28 @@ struct NativeDailyReflectionScreen: View {
         }
     }
 
+    private var boardRow: some View {
+        let open = ReflectionTodoBoard.openCount(in: store.days, checks: checks)
+        let isSelected = showingBoard
+        return Button { selectedID = Self.boardID } label: {
+            HStack(spacing: 9) {
+                RoundedRectangle(cornerRadius: 1.5).fill(isSelected ? Ink.accent : Color.clear).frame(width: 3)
+                Image(systemName: "checklist").font(.system(size: 13)).foregroundColor(Ink.accent)
+                Text(VL.text("To do")).font(.system(size: 13, weight: .semibold)).foregroundColor(Ink.text)
+                Spacer(minLength: 0)
+                if open > 0 {
+                    Text("\(open)").font(.system(size: 11, weight: .semibold)).monospacedDigit().foregroundColor(Ink.onAccent)
+                        .padding(.horizontal, 7).padding(.vertical, 2).background(Ink.accent).clipShape(Capsule())
+                }
+            }.padding(.vertical, 10).padding(.trailing, 10)
+                .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                .background(isSelected ? Ink.selection : Color.clear).cornerRadius(7)
+        }.buttonStyle(.plain).padding(.top, 8)
+            .accessibilityLabel(VL.text("To do")).accessibilityValue("\(open)")
+    }
+
     private func row(_ day: DailyReflectionDay) -> some View {
-        let isSelected = day.id == selected?.id
+        let isSelected = !showingBoard && day.id == selected?.id
         return Button { selectedID = day.id } label: {
             HStack(alignment: .top, spacing: 9) {
                 RoundedRectangle(cornerRadius: 1.5).fill(isSelected ? Ink.accent : Color.clear).frame(width: 3)
@@ -127,14 +168,60 @@ struct NativeDailyReflectionScreen: View {
             .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
-    private func reader(_ day: DailyReflectionDay, compact: Bool) -> some View {
-        ScrollViewReader { proxy in ScrollView {
+    private func board(compact: Bool) -> some View {
+        ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                Text(VL.text("To do")).font(.system(size: compact ? 19 : 22, weight: .semibold)).foregroundColor(Ink.text).padding(.bottom, 14)
+                ReflectionTodoBoard(days: store.days)
+            }.frame(maxWidth: 960, alignment: .leading).padding(.horizontal, compact ? 20 : 36).padding(.top, 22).padding(.bottom, 48)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .environment(\.openURL, OpenURLAction { url in
+            guard let link = Self.reflectionLink(url) else { return NSWorkspace.shared.open(url.absoluteURL) ? .handled : .systemAction }
+            jump(day: link.day, time: link.time)
+            return .handled
+        })
+    }
+
+    static func reflectionLink(_ url: URL) -> (day: String, time: String)? {
+        guard url.scheme == "vecta", url.host == "reflection",
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+              let day = items.first(where: { $0.name == "day" })?.value, let time = items.first(where: { $0.name == "t" })?.value else { return nil }
+        return (day, time)
+    }
+
+    private func reader(_ day: DailyReflectionDay, compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(day.date.formatted(.dateTime.weekday(.wide).month(.wide).day().year().locale(VL.locale)))
                     .font(.system(size: compact ? 19 : 22, weight: .semibold)).foregroundColor(Ink.text).textSelection(.enabled)
-                    .padding(.bottom, 6)
-                ReflectionMarkdownView(blocks: day.blocks, base: day.file.deletingLastPathComponent())
-            }.frame(maxWidth: 960, alignment: .leading).padding(.horizontal, compact ? 20 : 36).padding(.top, 22).padding(.bottom, 48)
+                Spacer(minLength: 0)
+                if transcript?.day == day.id {
+                    Picker("", selection: $mode) {
+                        Text(VL.text("Review")).tag(ReflectionMode.review)
+                        Text(VL.text("Full transcript")).tag(ReflectionMode.transcript)
+                    }.pickerStyle(.segmented).labelsHidden().frame(width: 230)
+                }
+            }.padding(.horizontal, compact ? 20 : 36).padding(.top, 22).padding(.bottom, 8)
+            if mode == .transcript, let transcript, transcript.day == day.id {
+                ReflectionTranscriptPane(transcript: transcript, request: $request, player: player)
+                    .padding(.horizontal, compact ? 12 : 28)
+            } else {
+                reviewScroll(day, compact: compact)
+            }
+        }
+        .task(id: day.id) {
+            let id = day.id
+            let loaded = await Task.detached(priority: .userInitiated) { ReflectionTranscript.load(day: id) }.value
+            transcript = loaded
+            if let loaded { player.load(loaded) }
+        }
+    }
+
+    private func reviewScroll(_ day: DailyReflectionDay, compact: Bool) -> some View {
+        ScrollViewReader { proxy in ScrollView {
+            ReflectionMarkdownView(blocks: day.blocks, base: day.file.deletingLastPathComponent(), jump: jump)
+                .frame(maxWidth: 960, alignment: .leading).padding(.horizontal, compact ? 20 : 36).padding(.bottom, 48)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }.onAppear {
             let target = Self.verificationArgument("--verify-reflection-block")
@@ -162,6 +249,8 @@ struct NativeDailyReflectionScreen: View {
 struct ReflectionMarkdownView: View {
     let blocks: [ReflectionBlock]
     let base: URL?
+    var jump: ((String, String) -> Void)? = nil
+    @ObservedObject private var checks = ReflectionChecks.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -172,7 +261,12 @@ struct ReflectionMarkdownView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .tint(Ink.link)
         .environment(\.openURL, OpenURLAction { url in
-            NSWorkspace.shared.open(url.absoluteURL) ? .handled : .systemAction
+            if let link = NativeDailyReflectionScreen.reflectionLink(url) {
+                guard let jump else { return .handled }
+                jump(link.day, link.time)
+                return .handled
+            }
+            return NSWorkspace.shared.open(url.absoluteURL) ? .handled : .systemAction
         })
     }
 
@@ -194,9 +288,12 @@ struct ReflectionMarkdownView: View {
             text(value).font(.system(size: 14)).lineSpacing(5).foregroundColor(Ink.text).textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         case .list(let items):
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in listRow(item) }
-            }
+            let shown = checks.ordered(items)
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(shown.enumerated()), id: \.element.key) { _, item in listRow(item) }
+            }.animation(.spring(response: 0.45, dampingFraction: 0.82), value: shown.map(\.key))
+        case .hours(let hours):
+            ReflectionHoursView(hours: hours)
         case .table(let header, let rows):
             table(header, rows)
         case .code(let value):
@@ -224,7 +321,16 @@ struct ReflectionMarkdownView: View {
         }
     }
 
-    private func listRow(_ item: ReflectionListItem) -> some View {
+    @ViewBuilder private func listRow(_ item: ReflectionListItem) -> some View {
+        if item.id != nil, item.task != nil {
+            ReflectionTaskLine(item: item, base: base).padding(.leading, CGFloat(item.level) * 20)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+        } else {
+            plainRow(item)
+        }
+    }
+
+    private func plainRow(_ item: ReflectionListItem) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Group {
                 if let done = item.task {
