@@ -109,6 +109,27 @@ import Foundation
         run.start(); RunLoop.main.run(until: Date().addingTimeInterval(0.3)); run.tick()
         try check(run.display?.text == "Background processing isn’t installed on this Mac" && run.display?.tone == .failed, "Kick failure")
 
+        // Progress nobody pressed a button for: shown, never locks the button, goes away when stale or finished.
+        let now = Date()
+        let fresh = ReflectionTranscription(source: "a.mp3", completedSeconds: 2400, totalSeconds: 13800, state: "transcribing", machine: nil, updatedAt: now.addingTimeInterval(-30))
+        let quiet = ReflectionRunState.display(pull: .none, requestID: nil, kickFailed: false, answer: nil, transcription: fresh, eta: 7500, now: now)
+        try check(quiet?.text == "Transcribing · 17% · about 2 h 5 min left" && quiet?.tone == .working && quiet?.busy == false, "Ambient progress with time left: \(quiet?.text ?? "nil")")
+        var windows = fresh; windows.machine = "windows"
+        try check(ReflectionRunState.display(pull: .none, requestID: nil, kickFailed: false, answer: nil, transcription: windows, eta: nil, now: now)?.text == "Transcribing · 17% · on the Windows PC", "Says when the Windows PC is doing it")
+        var stale = fresh; stale.updatedAt = now.addingTimeInterval(-3600)
+        try check(ReflectionRunState.display(pull: .none, requestID: nil, kickFailed: false, answer: nil, transcription: stale, now: now) == nil, "A stale status shows nothing")
+        var idle = fresh; idle.state = "idle"
+        try check(ReflectionRunState.display(pull: .none, requestID: nil, kickFailed: false, answer: nil, transcription: idle, now: now) == nil, "Idle shows nothing")
+        var decoding = fresh; decoding.state = "decoding"
+        try check(ReflectionRunState.display(pull: .none, requestID: nil, kickFailed: false, answer: nil, transcription: decoding, now: now)?.text == "Preparing the audio", "Decoding step")
+        let oldPress = ReflectionAnswer(id: "x", stage: "done", reason: nil, sources: [], written: ["2026-10-29"], updatedAt: nil)
+        try check(ReflectionRunState.display(pull: .finished, requestID: "x", kickFailed: false, answer: oldPress, transcription: fresh, eta: nil, now: now)?.ambient == true,
+                  "Live progress replaces last press's result")
+        let start = now.addingTimeInterval(-600)
+        try check(ReflectionRunState.eta(samples: [(start, 0), (now, 600)], total: 7200) == 6600 && ReflectionRunState.eta(samples: [(start, 0), (start.addingTimeInterval(60), 60)], total: 7200) == nil
+                  && ReflectionRunState.eta(samples: [(start, 5), (now, 5)], total: 7200) == nil, "Time left needs a trend of at least two minutes")
+        try check(ReflectionRunState.duration(2400) == "40 min" && ReflectionRunState.duration(7800) == "2 h 10 min" && ReflectionRunState.duration(7200) == "2 h", "Durations read plainly")
+
         print("PASS: \(assertions) Start reflection checks")
     }
 }

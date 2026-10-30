@@ -421,8 +421,8 @@ struct ReflectionRunStatus: View {
         HStack(spacing: 7) {
             // Breathes by size, not by fading, so the colour keeps its contrast. Driven by the clock rather than an
             // implicit animation, so a layout change never sends the dot sliding across the text.
-            TimelineView(.animation(minimumInterval: 1.0 / 15, paused: !display.busy || reduceMotion)) { context in
-                let phase = display.busy && !reduceMotion ? (sin(context.date.timeIntervalSinceReferenceDate * 2.6) + 1) / 2 : 1
+            TimelineView(.animation(minimumInterval: 1.0 / 15, paused: display.tone != .working || reduceMotion)) { context in
+                let phase = display.tone == .working && !reduceMotion ? (sin(context.date.timeIntervalSinceReferenceDate * 2.6) + 1) / 2 : 1
                 Circle().fill(color).frame(width: 8, height: 8).scaleEffect(0.6 + 0.4 * phase)
             }.frame(width: 8, height: 8)
             Text(display.text).font(.system(size: 12.5)).foregroundColor(display.tone == .failed ? Ink.error : Ink.secondary)
