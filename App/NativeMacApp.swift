@@ -31,6 +31,7 @@ import NotePinTransport
     var libraryQuestionScroll:Double=0
     var librarySearchSession=AILibrarySearchSession()
     var libraryQuestionTask:Task<Void,Never>?
+    var keywordSearchTask:Task<Void,Never>?
     var libraryIndexTask:Task<Void,Never>?
     var libraryCorpus:AITranscriptCorpus?
     var libraryIndexGeneration=UUID()
@@ -1532,7 +1533,10 @@ private enum NativeOwnerTokenStore {
     }
     @objc func importAudio() {model.chooseAudioImport()}
     @objc func openLibrary() {model.destination = .library;model.searchFocusSignal=UUID()}
-    @objc func searchLibrary() {openLibrary()}
+    @objc func searchLibrary() {
+        // The Daily Reflection screen has its own search over reviews, to-dos and day transcripts; everywhere else Cmd+F searches the library.
+        if model.destination == .reflection {NotificationCenter.default.post(name:.vectaFocusReflectionSearch,object:nil)} else {openLibrary()}
+    }
     @objc func exportRecording() {model.destination = .library;model.openDetailSignal=UUID();model.exportRequested=true}
     @objc func toggleSidebar() {model.sidebarToggleSignal=UUID()}
     @objc func playPause() {model.togglePlayback()}

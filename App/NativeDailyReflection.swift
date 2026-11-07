@@ -584,3 +584,134 @@ enum ReflectionPeriodSource {
         }.joined(separator: "|")
     }
 }
+
+// MARK: - Search
+
+/// One searchable line of the Daily Reflection data: a sentence of a day review, a to-do, a transcript sentence
+/// or a line of a weekly/monthly review. `target` is the day id (`2026-10-24`) or the period id (`week-2026-W44`).
+struct ReflectionSearchEntry: Identifiable, Equatable {
+    enum Kind: Equatable { case review, todo, transcript, period }
+    let id: String
+    let kind: Kind
+    let target: String
+    let heading: String
+    let text: String
+    let time: String?
+    let itemID: String?
+    let done: Bool
+    let folded: String
+}
+
+/// Substring search over everything the screen can show: day reviews (including the AI's summaries), to-dos, whole-day
+/// transcripts and the weekly/monthly reviews. Case, accents and width are ignored; every word of the query must be present,
+/// so Chinese and English can be mixed. Read-only: it never touches the files.
+enum ReflectionSearch {
+    static func fold(_ text: String) -> String {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+    }
+
+    static func terms(_ query: String) -> [String] {
+        fold(query).split(whereSeparator: { $0.isWhitespace }).map(String.init)
+    }
+
+    private static func entries(blocks: [ReflectionBlock], target: String, period: Bool, idBase: String) -> [ReflectionSearchEntry] {
+        var result: [ReflectionSearchEntry] = []
+        var heading = ""
+        func add(_ kind: ReflectionSearchEntry.Kind, _ raw: String, item: ReflectionListItem? = nil) {
+            let text = ReflectionMarkdown.plain(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return }
+            result.append(ReflectionSearchEntry(id: "\(idBase)#\(result.count)", kind: period ? .period : kind, target: target, heading: heading,
+                                                text: text, time: nil, itemID: item?.id, done: item?.task ?? false, folded: fold(text)))
+        }
+        for block in blocks {
+            switch block {
+            case .heading(_, let text): heading = ReflectionMarkdown.plain(text); add(.review, text)
+            case .paragraph(let text), .quote(let text): add(.review, text)
+            case .list(let items): for item in items { add(item.task != nil ? .todo : .review, item.text, item: item) }
+            case .table(let header, let rows):
+                for row in rows {
+                    // Keep the column names with the cells so "Time | What" rows read as a sentence.
+                    add(.review, zip(header, row).map { $0.isEmpty ? $1 : "\($0): \($1)" }.joined(separator: " · "))
+                }
+            case .code, .rule, .sourceBreak, .hours: break
+            }
+        }
+        return result
+    }
+
+    /// Newest day first, each day: its review lines and to-dos, then its transcript; the weekly/monthly reviews last.
+    static func entries(days: [DailyReflectionDay], periods: [ReflectionPeriod], transcripts: [String: ReflectionTranscript]) -> [ReflectionSearchEntry] {
+        var result: [ReflectionSearchEntry] = []
+        for day in days.sorted(by: { $0.id > $1.id }) {
+            result += entries(blocks: day.blocks, target: day.id, period: false, idBase: "day:" + day.id)
+            if let transcript = transcripts[day.id] {
+                for (index, segment) in transcript.segments.enumerated() {
+                    let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !text.isEmpty else { continue }
+                    result.append(ReflectionSearchEntry(id: "tr:\(day.id)#\(index)", kind: .transcript, target: day.id, heading: segment.speaker ?? "",
+                                                        text: text, time: segment.t, itemID: nil, done: false, folded: fold(text)))
+                }
+            }
+        }
+        for period in periods { result += entries(blocks: period.blocks, target: period.id, period: true, idBase: "period:" + period.id) }
+        return result
+    }
+
+    static func search(_ query: String, in entries: [ReflectionSearchEntry], limit: Int = 300) -> [ReflectionSearchEntry] {
+        let words = terms(query)
+        guard !words.isEmpty else { return [] }
+        var result: [ReflectionSearchEntry] = []
+        for entry in entries where words.allSatisfy({ entry.folded.contains($0) }) {
+            result.append(entry)
+            if result.count >= limit { break }
+        }
+        return result
+    }
+
+    /// The text around the first match, with an ellipsis where it was cut.
+    static func snippet(_ text: String, query: String, radius: Int = 60) -> String {
+        let flat = text.replacingOccurrences(of: "\n", with: " ")
+        guard flat.count > radius * 2 else { return flat }
+        let words = terms(query)
+        var start = flat.startIndex
+        for word in words {
+            if let range = flat.range(of: word, options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive]) { start = range.lowerBound; break }
+        }
+        let from = flat.index(start, offsetBy: -radius, limitedBy: flat.startIndex) ?? flat.startIndex
+        let to = flat.index(start, offsetBy: radius, limitedBy: flat.endIndex) ?? flat.endIndex
+        return (from > flat.startIndex ? "…" : "") + flat[from..<to] + (to < flat.endIndex ? "…" : "")
+    }
+}
+
+/// Builds the search entries off the main thread whenever the days, periods or transcripts change.
+@MainActor final class ReflectionSearchIndex: ObservableObject {
+    @Published private(set) var entries: [ReflectionSearchEntry] = []
+    @Published private(set) var ready = false
+    private var task: Task<Void, Never>?
+    private var key = ""
+
+    func rebuild(days: [DailyReflectionDay], periods: [ReflectionPeriod], folder: URL = ReflectionTranscript.folder()) {
+        let next = days.map { "\($0.id):\($0.markdown.count)" }.joined(separator: ",") + "|" + periods.map { "\($0.id):\($0.blocks.count)" }.joined(separator: ",")
+            + "|" + ReflectionSearchIndex.transcriptSignature(days: days, folder: folder)
+        guard next != key else { return }
+        key = next
+        task?.cancel()
+        task = Task.detached(priority: .utility) {
+            var transcripts: [String: ReflectionTranscript] = [:]
+            for day in days {
+                if Task.isCancelled { return }
+                if let transcript = ReflectionTranscript.load(day: day.id, folder: folder) { transcripts[day.id] = transcript }
+            }
+            let built = ReflectionSearch.entries(days: days, periods: periods, transcripts: transcripts)
+            if Task.isCancelled { return }
+            await MainActor.run { self.entries = built; self.ready = true }
+        }
+    }
+
+    nonisolated static func transcriptSignature(days: [DailyReflectionDay], folder: URL) -> String {
+        days.map { day in
+            let values = try? folder.appendingPathComponent("\(day.id).逐字稿.json").resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+            return "\(values?.fileSize ?? -1):\(values?.contentModificationDate?.timeIntervalSince1970 ?? 0)"
+        }.joined(separator: ",")
+    }
+}

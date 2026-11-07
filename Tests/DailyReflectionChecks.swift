@@ -144,6 +144,20 @@ import Foundation
         let periods = ReflectionPeriodSource.load(folder: periodFolder)
         try check(periods.map(\.id) == ["week-2026-W44", "month-2026-10"] && periods[0].title == "2026 年第 44 周" && periods[0].kind == .week, "Weeks come before months and take the heading as title")
         try check(ReflectionPeriodSource.signature(folder: periodFolder).contains("week-2026-W44.md") && !ReflectionPeriodSource.signature(folder: periodFolder).contains("notes"), "Only period files count")
+        // Search: reviews, to-dos, whole-day transcripts and weekly/monthly reviews, newest day first.
+        let searchDays = days.map { DailyReflectionDay(id: $0.0, date: Date(), markdown: $0.1, summary: "", file: periodFolder, blocks: ReflectionMarkdown.parse($0.1)) }
+        let index = ReflectionSearch.entries(days: searchDays, periods: periods, transcripts: ["2026-10-24": transcript])
+        try check(ReflectionSearch.search("投出", in: index).first?.kind == .todo, "A to-do is found as a to-do")
+        try check(ReflectionSearch.search("  ", in: index).isEmpty, "A blank query finds nothing")
+        try check(ReflectionSearch.search("对着电脑 口述", in: index).contains { $0.kind == .review && $0.target == "2026-10-24" }, "Every word must match, in any order")
+        try check(ReflectionSearch.search("你好", in: index).contains { $0.kind == .transcript && $0.time != nil }, "A transcript sentence is found with its clock time")
+        try check(ReflectionSearch.search("新增 3", in: index).contains { $0.kind == .period && $0.target == "week-2026-W44" }, "Weekly reviews are searched")
+        try check(ReflectionSearch.search("聊天", in: index).contains { $0.text.contains("时间: 课间") || $0.text.contains("事项: 聊天") }, "Table rows keep their column names")
+        try check(ReflectionSearch.search("ＡＢＣ", in: [ReflectionSearchEntry(id: "x", kind: .review, target: "d", heading: "", text: "abc", time: nil, itemID: nil, done: false, folded: ReflectionSearch.fold("abc"))]).count == 1, "Full-width letters match plain ones")
+        try check(index.firstIndex { $0.target == "2026-10-25" } ?? 0 < index.firstIndex { $0.target == "2026-10-24" } ?? 0, "The newest day comes first")
+        let long = String(repeating: "甲", count: 200) + "关键词" + String(repeating: "乙", count: 200)
+        let cut = ReflectionSearch.snippet(long, query: "关键词")
+        try check(cut.contains("关键词") && cut.hasPrefix("…") && cut.hasSuffix("…") && cut.count < 140, "A snippet is cut around the match")
         print("PASS \(assertions) daily reflection and theme assertions")
     }
 }

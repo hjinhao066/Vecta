@@ -11,6 +11,9 @@ struct NativeDailyReflectionScreen: View {
     @State private var request: ReflectionJumpRequest?
     @StateObject private var player = ReflectionAudioPlayer()
     @ObservedObject private var checks = ReflectionChecks.shared
+    @StateObject private var searchIndex = ReflectionSearchIndex()
+    @State private var query = ""
+    @FocusState private var searchFocused: Bool
     private static let boardID = "__todos__"
     enum ReflectionMode: Hashable { case review, transcript }
 
@@ -57,9 +60,10 @@ struct NativeDailyReflectionScreen: View {
                 GeometryReader { geometry in
                     let compact = geometry.size.width < 760
                     HStack(spacing: 0) {
-                        dayList.frame(width: compact ? 200 : 252)
+                        VStack(spacing: 0) { searchField; dayList }.frame(width: compact ? 200 : 252)
                         Rectangle().fill(Ink.border).frame(width: 1)
-                        if showingBoard { board(compact: compact) }
+                        if searching { searchResults(compact: compact) }
+                        else if showingBoard { board(compact: compact) }
                         else if let period = selectedPeriod { periodReader(period, compact: compact) }
                         else if let day = selected { reader(day, compact: compact) } else { Spacer() }
                     }
@@ -71,7 +75,12 @@ struct NativeDailyReflectionScreen: View {
         .onDisappear { store.stop(); player.stop() }
         .onChange(of: selectedID) { value in
             if request?.day != value { mode = .review; player.stop() }
+            query = ""
         }
+        .onChange(of: store.days) { _ in rebuildSearchIndex() }
+        .onChange(of: store.periods) { _ in rebuildSearchIndex() }
+        .onChange(of: query) { _ in rebuildSearchIndex() }
+        .onReceive(NotificationCenter.default.publisher(for: .vectaFocusReflectionSearch)) { _ in searchFocused = true }
         .onChange(of: run.display) { value in if value?.tone == .done { store.refresh(force: true) } }
     }
 
@@ -429,5 +438,91 @@ struct ReflectionRunStatus: View {
                 .lineLimit(2).fixedSize(horizontal: false, vertical: true)
         }
         .help(display.text).accessibilityElement(children: .combine)
+    }
+}
+
+
+// MARK: - Search
+
+extension Notification.Name {
+    /// Cmd+F while the Daily Reflection screen is showing: put the cursor in its search box.
+    static let vectaFocusReflectionSearch = Notification.Name("Vecta.focusReflectionSearch")
+}
+
+extension NativeDailyReflectionScreen {
+    fileprivate var searching: Bool { !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    fileprivate func rebuildSearchIndex() { searchIndex.rebuild(days: store.days, periods: store.periods) }
+
+    fileprivate var searchField: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundColor(Ink.muted)
+            TextField(VL.text("Search reviews, to-dos, transcripts"), text: $query).textFieldStyle(.plain).font(.system(size: 12.5))
+                .focused($searchFocused).onSubmit { rebuildSearchIndex() }
+                .onExitCommand { query = "" }
+            if !query.isEmpty {
+                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundColor(Ink.muted) }.buttonStyle(.plain)
+                    .accessibilityLabel(VL.text("Clear search"))
+            }
+        }.padding(.horizontal, 10).padding(.vertical, 8).background(Ink.surface).cornerRadius(8)
+            .padding(.horizontal, 10).padding(.vertical, 8)
+    }
+
+    fileprivate func searchTitle(_ entry: ReflectionSearchEntry) -> String {
+        if entry.kind == .period { return store.periods.first { $0.id == entry.target }?.title ?? entry.target }
+        guard let day = store.days.first(where: { $0.id == entry.target }) else { return entry.target }
+        let date = day.date.formatted(.dateTime.month(.abbreviated).day().weekday(.abbreviated).locale(VL.locale))
+        return entry.time.map { "\(date) · \($0)" } ?? date
+    }
+
+    fileprivate func searchLabel(_ kind: ReflectionSearchEntry.Kind) -> String {
+        switch kind {
+        case .review: return VL.text("Review")
+        case .todo: return VL.text("To do")
+        case .transcript: return VL.text("Transcript")
+        case .period: return VL.text("Weekly / monthly")
+        }
+    }
+
+    fileprivate func open(_ entry: ReflectionSearchEntry) {
+        let target = entry.target
+        query = ""
+        switch entry.kind {
+        case .transcript: if let time = entry.time { jump(day: target, time: time) }
+        case .period: selectedID = "period:" + target
+        case .review, .todo: selectedID = target
+        }
+    }
+
+    fileprivate func searchResults(compact: Bool) -> some View {
+        let hits = ReflectionSearch.search(query, in: searchIndex.entries)
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 4) {
+                if !searchIndex.ready {
+                    HStack(spacing: 8) { ProgressView().controlSize(.small); Text(VL.text("Indexing reviews and transcripts…")).foregroundColor(Ink.secondary) }.padding(.vertical, 8)
+                } else if hits.isEmpty {
+                    Text(VL.text("Nothing found.")).foregroundColor(Ink.secondary).padding(.vertical, 8)
+                } else {
+                    Text(hits.count >= 300 ? VL.text("300+ results") : "\(hits.count) " + VL.text("results")).font(.system(size: 11, weight: .semibold)).foregroundColor(Ink.muted).padding(.bottom, 6)
+                }
+                ForEach(hits) { entry in
+                    Button { open(entry) } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 8) {
+                                Image(systemName: entry.kind == .todo ? (checks.isDone(entry.itemID ?? "", fallback: entry.done) ? "checkmark.circle" : "circle") : (entry.kind == .transcript ? "waveform" : "doc.text"))
+                                    .font(.system(size: 12)).foregroundColor(Ink.accent)
+                                Text(searchTitle(entry)).font(.system(size: 13, weight: .semibold)).foregroundColor(Ink.text)
+                                Text(searchLabel(entry.kind)).font(.system(size: 10.5, weight: .medium)).foregroundColor(Ink.muted)
+                                Spacer(minLength: 0)
+                                Image(systemName: "arrow.up.right").font(.system(size: 10)).foregroundColor(Ink.muted)
+                            }
+                            Text(ReflectionSearch.snippet(entry.text, query: query)).font(.system(size: 12.5)).foregroundColor(Ink.secondary)
+                                .lineLimit(3).multilineTextAlignment(.leading).lineSpacing(2)
+                        }.padding(.vertical, 9).padding(.horizontal, 12).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                            .background(Ink.surface.opacity(0.5)).cornerRadius(8)
+                    }.buttonStyle(.plain)
+                }
+            }.padding(.horizontal, compact ? 14 : 28).padding(.vertical, 14)
+        }
     }
 }

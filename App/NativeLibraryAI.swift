@@ -41,7 +41,25 @@ import SwiftUI
             } catch { if ownsLibraryOperation(scope) { libraryIndexMessage=error.localizedDescription } }
         }
     }
+    /// True while the search box holds text and no AI answer is showing: the box then lists plain keyword matches.
+    var keywordSearching:Bool {!hasLibraryQuestion && !search.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty}
+    /// Typing searches transcripts and summaries at once. Asking the AI is a separate, explicit button.
+    func libraryQueryChanged() {
+        let query=search.trimmingCharacters(in:.whitespacesAndNewlines)
+        if hasLibraryQuestion,search != librarySearchSession.submittedQuestion {dismissLibraryAnswer()}
+        keywordSearchTask?.cancel()
+        guard !query.isEmpty else {globalSearchHits=[];searchingLibrary=false;keywordSearchTask=nil;return}
+        keywordSearchTask=Task {[self] in await searchLibrary()}
+    }
+    /// Drops the AI answer but keeps what was typed.
+    func dismissLibraryAnswer() {
+        objectWillChange.send()
+        librarySearchSession.clear()
+        libraryQuestionScroll=0;libraryAnswer=nil;libraryAnswerSources=[];libraryAnswerDraft="";libraryQuestionPhase="";searchError=nil;libraryQuestionBusy=false;libraryQuestionModel=nil
+        libraryQuestionTask?.cancel();libraryQuestionTask=nil
+    }
     func clearLibraryQuestion() {
+        keywordSearchTask?.cancel();keywordSearchTask=nil;globalSearchHits=[];searchingLibrary=false
         objectWillChange.send()
         librarySearchSession.clear()
         libraryQuestionScroll=0;search="";libraryAnswer=nil;libraryAnswerSources=[];libraryAnswerDraft="";libraryQuestionPhase="";searchError=nil;libraryQuestionBusy=false;libraryQuestionModel=nil

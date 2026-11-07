@@ -69,6 +69,40 @@ struct NativeLibraryAIResults:View {
     private func clock(_ seconds:Double)->String {let s=max(0,Int(seconds));return String(format:"%d:%02d",s/60,s%60)}
 }
 
+/// Plain keyword matches over every recording's transcript, its summaries and its title. A click opens the recording at that sentence.
+struct NativeLibrarySearchResults:View {
+    @ObservedObject var model:NativeMacModel
+    var body:some View {
+        let hits=model.globalSearchHits
+        ScrollView {
+            LazyVStack(alignment:.leading,spacing:6) {
+                if model.searchingLibrary && hits.isEmpty {
+                    HStack(spacing:8) {ProgressView().controlSize(.small);Text(VL.text("Searching…")).foregroundColor(Ink.secondary)}.padding(.vertical,6)
+                } else if hits.isEmpty {
+                    Text(VL.text("Nothing found. Ask AI to look by meaning.")).foregroundColor(Ink.secondary).padding(.vertical,6)
+                } else {
+                    Text(hits.count>=100 ? VL.text("100+ results"):"\(hits.count) "+VL.text("results")).font(.system(size:11,weight:.semibold)).foregroundColor(Ink.muted).padding(.bottom,4)
+                }
+                ForEach(hits) {hit in
+                    Button {model.openSource(hit)} label:{
+                        VStack(alignment:.leading,spacing:5) {
+                            HStack(spacing:8) {
+                                Text(hit.title).font(.system(size:13.5,weight:.semibold)).lineLimit(1)
+                                Text(hit.kind).font(.system(size:10.5,weight:.medium)).foregroundColor(Ink.muted)
+                                Spacer(minLength:8)
+                                Text(hit.date.vectaFormatted(date:.abbreviated,time:.shortened)+(hit.start.map{" · "+clock($0)} ?? "")).font(.system(size:11)).foregroundColor(Ink.muted)
+                                Image(systemName:"arrow.up.right").font(.system(size:10)).foregroundColor(Ink.muted)
+                            }
+                            Text(ReflectionSearch.snippet(hit.text,query:model.search,radius:110)).font(.system(size:12.5)).foregroundColor(Ink.secondary).lineLimit(3).multilineTextAlignment(.leading).lineSpacing(2)
+                        }.padding(.vertical,9).padding(.horizontal,12).frame(maxWidth:.infinity,alignment:.leading).contentShape(Rectangle()).background(Ink.surface.opacity(0.5)).cornerRadius(8)
+                    }.buttonStyle(.plain).accessibilityLabel(VL.text("Open: ")+hit.title)
+                }
+            }.padding(.bottom,18).frame(maxWidth:760,alignment:.leading).frame(maxWidth:.infinity,alignment:.leading)
+        }
+    }
+    private func clock(_ seconds:Double)->String {let s=max(0,Int(seconds));return String(format:"%d:%02d",s/60,s%60)}
+}
+
 private struct LibrarySearchScrollMemory:NSViewRepresentable {
     var model:NativeMacModel
     func makeCoordinator()->Coordinator {Coordinator(model:model)}
