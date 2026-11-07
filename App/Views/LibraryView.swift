@@ -96,7 +96,6 @@ struct NativeMacView: View {
                 Text("«" + (deletingRecording?.title ?? VL.text("Запись")) + VL.text("» будет перемещена в корзину Vecta вместе с расшифровками и саммари. Её можно восстановить. Запись на Plaud сохранится и не вернётся при синхронизации."))
             }
             .sheet(isPresented: $showingRecordingTrash) { NativeRecordingTrash(model: model) }
-            .task(id:model.libraryCorpusFingerprint) {model.refreshLibraryIndex()}
             .task { if !VectaRuntimePreferences.isVerification { await model.start() } }
     }
     private var unavailable: some View {
@@ -221,13 +220,8 @@ struct NativeMacView: View {
                 if !model.search.isEmpty || model.hasLibraryQuestion {
                     Button(action:model.clearLibraryQuestion) {Image(systemName:"xmark.circle.fill").foregroundColor(Ink.muted)}.buttonStyle(.plain).help(VL.text("Очистить вопрос и ответ")).accessibilityLabel(VL.text("Очистить вопрос и ответ"))
                 }
-                Button(action:model.askLibraryQuestion) {HStack(spacing:5) {Image(systemName:"sparkles").font(.system(size:11,weight:.semibold));Text(VL.text("Ask AI")).font(.system(size:12,weight:.semibold))}.padding(.horizontal,10).frame(height:28).background(Ink.accent).foregroundColor(Ink.onAccent).cornerRadius(7)}.buttonStyle(.plain).disabled(model.search.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || model.search.count>2000).help(VL.text("Спросить Vecta AI")).accessibilityLabel(VL.text("Спросить Vecta AI"))
             }.padding(12).background(Ink.surface).cornerRadius(9).frame(maxWidth:760)
-            if let validation=VectaUX.questionValidation(model.search) {Text(validation).font(.system(size:11)).foregroundColor(Ink.secondary)}
-            if !model.libraryIndexMessage.isEmpty {HStack {Text(model.libraryIndexMessage).font(.system(size:11)).foregroundColor(Ink.muted);if model.libraryAssetsMissing {Button(VL.text("Установить ресурсы поиска"),action:model.installLibrarySearchAssets).buttonStyle(.plain).font(.system(size:11))}}}
-            if model.hasLibraryQuestion {
-                NativeLibraryAIResults(model:model)
-            } else if model.keywordSearching {
+            if model.keywordSearching {
                 NativeLibrarySearchResults(model:model)
             } else {
                 HStack {Text(VectaUX.recordings(model.items.count));Spacer();Menu(oldestFirst ? VL.text("Сначала старые"):VL.text("Сначала новые")) {Button(VL.text("Сначала новые")){oldestFirst=false};Button(VL.text("Сначала старые")){oldestFirst=true}}.menuStyle(.borderlessButton).fixedSize()}.font(.system(size:11)).foregroundColor(Ink.muted)

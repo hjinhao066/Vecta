@@ -79,7 +79,7 @@ struct NativeLibrarySearchResults:View {
                 if model.searchingLibrary && hits.isEmpty {
                     HStack(spacing:8) {ProgressView().controlSize(.small);Text(VL.text("Searching…")).foregroundColor(Ink.secondary)}.padding(.vertical,6)
                 } else if hits.isEmpty {
-                    Text(VL.text("Nothing found. Ask AI to look by meaning.")).foregroundColor(Ink.secondary).padding(.vertical,6)
+                    Text(VL.text("Nothing found.")).foregroundColor(Ink.secondary).padding(.vertical,6)
                 } else {
                     Text(hits.count>=100 ? VL.text("100+ results"):"\(hits.count) "+VL.text("results")).font(.system(size:11,weight:.semibold)).foregroundColor(Ink.muted).padding(.bottom,4)
                 }
