@@ -34,7 +34,7 @@ struct NativeLibraryAIResults:View {
                                 Text(paragraph.text).font(.system(size:15)).lineSpacing(5).textSelection(.enabled)
                                 HStack(spacing:8) {ForEach(paragraph.sourceIDs,id:\.self) {id in
                                     if let source=model.libraryAnswerSources.first(where:{$0.id==id}) {
-                                        Button {model.openLibrarySource(source)} label:{Text("["+id.dropFirst()+"]"+(source.start.map{" · "+clock($0)} ?? ""))}.buttonStyle(.plain).font(.system(size:11,weight:.medium)).foregroundColor(Ink.secondary).help(source.title)
+                                        Button {model.openLibrarySource(source)} label:{Text(sourceLabel(id:id,start:source.start))}.buttonStyle(.plain).font(.system(size:11,weight:.medium)).foregroundColor(Ink.secondary).help(source.title)
                                     }
                                 }}
                             }
@@ -51,7 +51,7 @@ struct NativeLibraryAIResults:View {
                         Button {model.openLibrarySource(source)} label:{
                             VStack(alignment:.leading,spacing:8) {
                                 HStack(alignment:.top,spacing:12) {
-                                    Text("["+source.id.dropFirst()+"]").font(.system(size:11)).foregroundColor(Ink.muted)
+                                    Text("[\(source.id.dropFirst())]").font(.system(size:11)).foregroundColor(Ink.muted)
                                     Text(source.title).font(.system(size:14,weight:.medium)).fixedSize(horizontal:false,vertical:true)
                                     Spacer(minLength:8)
                                     Image(systemName:"arrow.up.right").font(.system(size:11)).foregroundColor(Ink.muted)
@@ -65,6 +65,10 @@ struct NativeLibraryAIResults:View {
             }.padding(18).frame(maxWidth:760,alignment:.leading).frame(maxWidth:.infinity,alignment:.leading)
                 .background(LibrarySearchScrollMemory(model:model))
         }.background(Ink.surface.opacity(0.35)).cornerRadius(10)
+    }
+    private func sourceLabel(id:String,start:Double?)->String {
+        let time:String=start.map {" · "+clock($0)} ?? ""
+        return "[\(id.dropFirst())]"+time
     }
     private func clock(_ seconds:Double)->String {let s=max(0,Int(seconds));return String(format:"%d:%02d",s/60,s%60)}
 }

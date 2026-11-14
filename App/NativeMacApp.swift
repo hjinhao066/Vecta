@@ -68,7 +68,8 @@ import NotePinTransport
     @Published var batteryReadAt: Date? = UserDefaults.standard.object(forKey: "Vecta.lastBatteryAt") as? Date
     @Published var pickerStatus = ""
     @Published var scanning = false
-    @Published var destination: NativeDestination = .library
+    /// Daily Reflection is the first page on every launch.
+    @Published var destination: NativeDestination = .reflection
     @Published var languageRestarting=false
     @Published var languageRestartError:String?
     @Published var localAI: LocalAIHost? {

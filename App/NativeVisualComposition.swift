@@ -201,7 +201,12 @@ enum NativeVisualComposer {
         if candidates.isEmpty || best.isEmpty {
             heading.append(.init(text:candidates.isEmpty ? VL.text("Нет сохранённых визуальных данных"):VL.text("Содержание не помещается без потери смысла. Откройте сохранённый отчёт."),frame:CGRect(x:64,y:350,width:1072,height:140),size:24,bold:false,secondary:true))
         }
-        let document=NativeVisualComposition(family:bestFamily,heading:heading,cards:best,footer:footer,omittedIDs:omitted,completeText:([title,report.subtitle ?? ""]+report.blocks.map(\.title)+candidates.map(\.complete)+report.blocks.flatMap {($0.edges ?? []).map(\.label)}).filter {!$0.isEmpty}.joined(separator:"\n\n"))
+        var parts:[String]=[title,report.subtitle ?? ""]
+        parts.append(contentsOf:report.blocks.map(\.title))
+        parts.append(contentsOf:candidates.map(\.complete))
+        parts.append(contentsOf:report.blocks.flatMap {($0.edges ?? []).map(\.label)})
+        let completeText:String=parts.filter {!$0.isEmpty}.joined(separator:"\n\n")
+        let document=NativeVisualComposition(family:bestFamily,heading:heading,cards:best,footer:footer,omittedIDs:omitted,completeText:completeText)
         let bounds=CGRect(origin:.zero,size:NativeVisualComposition.size)
         guard document.allText.allSatisfy({bounds.contains($0.frame) && NativeVisualTypesetter.fits($0)}),
               document.cards.allSatisfy({card in heading.allSatisfy {!$0.frame.intersects(card.frame)} && !footer.frame.intersects(card.frame)}) else {throw AIProcessingError.invalidSummary}

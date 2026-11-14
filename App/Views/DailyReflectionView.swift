@@ -15,6 +15,8 @@ struct NativeDailyReflectionScreen: View {
     @State private var query = ""
     @FocusState private var searchFocused: Bool
     private static let boardID = "__todos__"
+    private static let askID = "__ask__"
+    @ObservedObject private var chat = ReflectionChatController.shared
     enum ReflectionMode: Hashable { case review, transcript }
 
     private static func verificationArgument(_ name: String) -> String? {
@@ -25,6 +27,7 @@ struct NativeDailyReflectionScreen: View {
     }
 
     private var showingBoard: Bool { selectedID == Self.boardID }
+    private var showingAsk: Bool { selectedID == Self.askID }
     private var selectedPeriod: ReflectionPeriod? { selectedID.flatMap { id in store.periods.first { "period:" + $0.id == id } } }
     private var selected: DailyReflectionDay? { store.days.first { $0.id == selectedID } ?? store.days.first }
 
@@ -63,6 +66,7 @@ struct NativeDailyReflectionScreen: View {
                         VStack(spacing: 0) { searchField; dayList }.frame(width: compact ? 200 : 252)
                         Rectangle().fill(Ink.border).frame(width: 1)
                         if searching { searchResults(compact: compact) }
+                        else if showingAsk { ReflectionChatPane(chat: chat, reviewFolder: store.folder, compact: compact, jump: jump) }
                         else if showingBoard { board(compact: compact) }
                         else if let period = selectedPeriod { periodReader(period, compact: compact) }
                         else if let day = selected { reader(day, compact: compact) } else { Spacer() }
@@ -115,6 +119,7 @@ struct NativeDailyReflectionScreen: View {
     private var dayList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 2, pinnedViews: [.sectionHeaders]) {
+                askRow
                 boardRow
                 if !store.periods.isEmpty {
                     Text(VL.text("Weeks and months")).font(.system(size: 11, weight: .semibold)).foregroundColor(Ink.muted)
@@ -135,6 +140,22 @@ struct NativeDailyReflectionScreen: View {
         }
     }
 
+    private var askRow: some View {
+        let isSelected = showingAsk
+        return Button { selectedID = Self.askID } label: {
+            HStack(spacing: 9) {
+                RoundedRectangle(cornerRadius: 1.5).fill(isSelected ? Ink.accent : Color.clear).frame(width: 3)
+                Image(systemName: "sparkles").font(.system(size: 13)).foregroundColor(Ink.accent)
+                Text(VL.text("Ask AI")).font(.system(size: 13, weight: .semibold)).foregroundColor(Ink.text)
+                Spacer(minLength: 0)
+                if chat.busy { ProgressView().controlSize(.mini) }
+            }.padding(.vertical, 10).padding(.trailing, 10)
+                .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                .background(isSelected ? Ink.selection : Color.clear).cornerRadius(7)
+        }.buttonStyle(.plain).padding(.top, 8)
+            .help(VL.text("Ask AI about every day")).accessibilityLabel(VL.text("Ask AI"))
+    }
+
     private var boardRow: some View {
         let open = ReflectionTodoBoard.openCount(in: store.days, checks: checks)
         let isSelected = showingBoard
@@ -151,7 +172,7 @@ struct NativeDailyReflectionScreen: View {
             }.padding(.vertical, 10).padding(.trailing, 10)
                 .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                 .background(isSelected ? Ink.selection : Color.clear).cornerRadius(7)
-        }.buttonStyle(.plain).padding(.top, 8)
+        }.buttonStyle(.plain)
             .accessibilityLabel(VL.text("To do")).accessibilityValue("\(open)")
     }
 
@@ -178,7 +199,7 @@ struct NativeDailyReflectionScreen: View {
     }
 
     private func row(_ day: DailyReflectionDay) -> some View {
-        let isSelected = !showingBoard && selectedPeriod == nil && day.id == selected?.id
+        let isSelected = !showingBoard && !showingAsk && selectedPeriod == nil && day.id == selected?.id
         return Button { selectedID = day.id } label: {
             HStack(alignment: .top, spacing: 9) {
                 RoundedRectangle(cornerRadius: 1.5).fill(isSelected ? Ink.accent : Color.clear).frame(width: 3)

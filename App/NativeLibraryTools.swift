@@ -120,48 +120,6 @@ struct NativeSearchHit:Identifiable {
         openSource(NativeSearchHit(recording:item.identity,request:task.requestID,title:item.title,date:item.createdAt,text:segment.text,speaker:nil,segment:id,start:segment.start,end:segment.end))
     }
 }
-struct NativeLibrarySearchResults:View {
-    @ObservedObject var model:NativeMacModel
-    @State private var deleting: NativeRecordingIdentity?
-    var body:some View {
-        ScrollView {
-            LazyVStack(alignment:.leading,spacing:16) {
-                if model.searchingLibrary {HStack {ProgressView().controlSize(.small);Text(VL.text("Ищем в сохранённых расшифровках и саммари…"))}}
-                if model.globalSearchHits.isEmpty && !model.searchingLibrary {Text(VL.text("Ничего не найдено")).foregroundColor(Ink.secondary)}
-                ForEach(model.globalSearchHits.reduce(into:[NativeRecordingIdentity]()) {result,hit in if !result.contains(hit.recording) {result.append(hit.recording)}},id:\.self) {recording in
-                VStack(alignment:.leading,spacing:8) {
-                ForEach(model.globalSearchHits.filter {$0.recording==recording}) {hit in Button {model.openSource(hit)} label:{
-                    VStack(alignment:.leading,spacing:8) {
-                        Text(highlight(hit.title)).font(.system(size:16,weight:.medium))
-                        Text(hit.kind).font(.system(size:11,weight:.medium)).foregroundColor(Ink.secondary)
-                        Text(highlight(hit.text)).font(.system(size:13)).lineLimit(3).foregroundColor(Ink.secondary)
-                        HStack {Text(hit.date.vectaFormatted(date:.abbreviated,time:.shortened));if let speaker=hit.speaker {Text(speaker)};if let start=hit.start {Text(String(format:"[%d:%02d]",Int(start)/60,Int(start)%60))} else {Text(VL.text("Без точного таймкода"))}}.font(.system(size:11)).foregroundColor(Ink.muted)
-                    }.frame(maxWidth:.infinity,alignment:.leading).padding(16).background(Ink.surface).cornerRadius(8)
-                }.buttonStyle(.plain)}
-                }.padding(8).overlay(RoundedRectangle(cornerRadius:10).stroke(Ink.border))
-                .contextMenu { Button(VL.text("Удалить запись"), role: .destructive) { deleting = recording }.disabled(!model.canDeleteRecording(recording)) }
-                }
-                if model.globalSearchHits.count>=100 {Text(VL.text("Показаны первые 100 совпадений. Уточните запрос.")).font(.system(size:11)).foregroundColor(Ink.secondary)}
-            }
-        }
-        .confirmationDialog(VL.text("Удалить запись?"), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
-            Button(VL.text("Удалить запись"), role: .destructive) { if let id = deleting { model.deleteRecording(id) }; deleting = nil }
-            Button(VL.text("Отмена"), role: .cancel) { deleting = nil }
-        } message: { Text(VL.text("Запись будет перемещена в корзину Vecta вместе с расшифровками и саммари. Её можно восстановить. Запись на Plaud сохранится и не вернётся при синхронизации.")) }
-    }
-    private func highlight(_ text:String)->AttributedString {
-        var value=AttributedString(text)
-        for term in model.search.split(whereSeparator:{$0.isWhitespace}).map(String.init) where !term.isEmpty {
-            var range=text.startIndex..<text.endIndex
-            while let found=text.range(of:term,options:[.caseInsensitive,.diacriticInsensitive],range:range) {
-                if let attributed=Range(found,in:value) {value[attributed].backgroundColor=Ink.selection;value[attributed].foregroundColor=Ink.text}
-                range=found.upperBound..<text.endIndex
-            }
-        }
-        return value
-    }
-
-}
 struct NativeTaskScreen:View {
     @ObservedObject var model:NativeMacModel
     @State private var query=""
